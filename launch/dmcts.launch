@@ -1,6 +1,7 @@
 
 <launch>
   <arg name="num_nodes"/>
+  <arg name="num_agents"/>
 	<node pkg="tf" type="static_transform_publisher" name="map_2_world_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
 
 	<node pkg="tf" type="static_transform_publisher" name="gps_2_world_broadcaster" args="0 0 0 0 0 0 1 world gps 100" />
@@ -13,6 +14,7 @@
     <param name="score_run" type="bool" value="false"/>
     <param name="display_map" type="bool" value="false"/>
     <param name="number_of_nodes" value="$(arg num_nodes)"/>
+    <param name="number_of_agents" value="$(arg num_agents)"/>
     <include file="$(find my_quad_controller)/launch/pid_controller_0.launch"/>
   </group>
 </launch>

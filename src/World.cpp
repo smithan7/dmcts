@@ -18,7 +18,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in ) {
+World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in ) {
 	ROS_ERROR("World::my_agent_index_in: %i", my_agent_index_in);
 	this->initialized = false;
 	this->show_display = display_plot;
@@ -31,6 +31,7 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->mcts_n_kids = 10;
 	this->world_directory = world_directory;
 	this->my_agent_index = my_agent_index_in;
+	this->n_agents = number_of_agents_in;
 	this->flat_tasks = true;
 
 	// how often do I plot
@@ -71,18 +72,20 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->p_task_initially_active = 0.625; // how likely is it that a task is initially active, 3-0.25, 5-0.5, 7-0.75
 	this->p_impossible_task = 0.0; // how likely is it that an agent is created that cannot complete a task
 	this->p_activate_task = 0.0;// 1.0*this->dt; // how likely is it that I will activate a task each second? *dt accounts per iters per second
-	this->min_task_time = 100.0; // shortest time to complete a task
-	this->max_task_time = 600.0; // longest time to complete a task
+	this->min_task_time = 1000.0; // shortest time to complete a task
+	this->max_task_time = 6000.0; // longest time to complete a task
 	this->min_task_work = 1.0;
 	this->max_task_work = 1.0;
 	this->min_task_reward = 100.0;
 	this->max_task_reward = 500.0;
 
 	// agent stuff
-	this->n_agents = 2; // how many agents
-	this->n_agent_types = 4; // how many types of agents
+	this->n_agent_types = 1; // how many types of agents
 	this->min_travel_vel = 1.9; // 5 - slowest travel speed
 	this->max_travel_vel = 1.95; // 25 - fastest travel speed
+	this->min_agent_work = 100.0; // min amount of work an agent does per second
+	this->max_agent_work = 100.0; // max amount of work an agent does per second
+
 
 	// write params
 	this->write_params();
@@ -113,8 +116,6 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	// initialize agents
 	this->initialize_agents(nHandle);
 	this->initialized = true;
-
-	this->display_world(1);
 }
 
 void World::plot_timer_callback(const ros::TimerEvent &e){
@@ -528,7 +529,7 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 	//fs["agent_work_radii"] >> agent_work_radii;
 	std::vector<int> agent_types;
 	//fs["agent_types"] >> agent_types;
-	for(int i=0; i<this->n_agent_types; i++){
+	for(int i=0; i<this->n_agents; i++){
 		agent_types.push_back(0);
 	}
 
@@ -719,8 +720,7 @@ void World::initialize_nodes_and_tasks() {
 				at.push_back(double(INFINITY));
 			}
 			else {
-				double tt = this->rand_double_in_range(this->min_task_time, this->max_task_time);
-				at.push_back(tt);
+				at.push_back(this->rand_double_in_range(this->min_agent_work, this->max_agent_work));
 			}
 		}
 		task_work_by_agent.push_back(at);

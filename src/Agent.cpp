@@ -308,6 +308,7 @@ void Agent::publish_work_request(const int &goal_node ){
 	srv.request.yLoc = this->pose->get_y();
 	srv.request.a_type = this->type;
 	srv.request.c_time = 0.0;
+	srv.request.work_rate = this->act_duration.toSec();
 	if (this->work_client.call(srv)){
 	    int a;
 	}
@@ -427,12 +428,12 @@ bool Agent::at_goal() { // am I at my goal node?
 bool Agent::plan(){
 	ROS_INFO("Agent[%i]::plan: in", this->index);
 	if(this->location_initialized){
-		ROS_INFO("Agent[%i]::plan: this->edge.x: %i", this->index, this->edge.x);
+		//ROS_INFO("Agent[%i]::plan: this->edge.x: %i", this->index, this->edge.x);
 		this->planner->plan(); // I am not at my goal, select new goal
-		ROS_INFO("Agent[%i]::plan: out of planner->plan", this->index);
+		//ROS_INFO("Agent[%i]::plan: out of planner->plan", this->index);
 		this->coordinator->advertise_task_claim(this->world); // select the next edge on the path to goal
 		this->publish_coord_plan();
-		ROS_INFO("Agent[%i]::plan: out of advertise_task_claim", this->index);
+		//ROS_INFO("Agent[%i]::plan: out of advertise_task_claim", this->index);
 		return true;
 	}
 	else{

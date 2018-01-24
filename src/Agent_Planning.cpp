@@ -403,28 +403,40 @@ void Agent_Planning::MCTS_task_selection(){
 		int max_index;
 		std::vector<std::string> args;
 		std::vector<double> vals;
+		ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
 		if (this->mcts->exploit_tree(max_index, args, vals)) {
-			this->set_goal(max_index);
-			if (world->are_nbrs(this->agent->get_loc(), max_index)) {
-				// I am nbrs with the next node in the tree. Replace root with child and prune
-				this->mcts->prune_branches();
-				MCTS* old = this->mcts;
-				this->mcts = this->mcts->get_golden_child();
-				this->mcts->set_as_root();
-				delete old;
-			}
-			else {
-				// I am not nbrs with the next node, replace root index with current node but don't advance/prune tree
-				int ind = int(this->agent->get_goal()->get_path().size()) - 2; //
-				if (ind >= 0) {
-					this->mcts->set_task_index(this->agent->get_goal()->get_path()[ind]);
+			// only make a new goal if the current goai is NOT active
+			if(!this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active()){
+				this->set_goal(max_index);
+				ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+				if (world->are_nbrs(this->agent->get_loc(), max_index)) {
+					// I am nbrs with the next node (my goal) in the tree. Replace root with child and prune
+					ROS_ERROR("Agent_Planning::MCTS_task_selection: am nbrs with next node");
+					this->mcts->prune_branches();
+					MCTS* old = this->mcts;
+					this->mcts = this->mcts->get_golden_child();
+					this->mcts->set_as_root();
+					delete old;
 				}
-				else if (this->agent->get_goal()->get_path().size() == 1) {
-					this->mcts->set_task_index(this->agent->get_goal()->get_index());
-				}
+				else {
+					// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
+					int ind = int(this->agent->get_goal()->get_path().size()) - 2; //
+					ROS_ERROR("Agent_Planning::MCTS_task_selection: I am NOT nbrs with next node");
+					if (ind >= 0) {
+						// update the task index of the first node
+						ROS_ERROR("Agent_Planning::MCTS_task_selection: updating task index");
+						this->mcts->set_task_index(this->agent->get_goal()->get_path()[ind]);
+					}
+					else if (this->agent->get_goal()->get_path().size() == 1) {
+						ROS_ERROR("Agent_Planning::MCTS_task_selection: weird at node behavior");
+						this->mcts->set_task_index(this->agent->get_goal()->get_index());
+					}
+				}	
 			}
+			
 		}
 	}
+
 }
 
 void Agent_Planning::set_goal(int goal_index) {
