@@ -1,0 +1,31 @@
+
+<launch>
+  <arg name="num_nodes"/>
+	<node pkg="tf" type="static_transform_publisher" name="map_2_world_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
+
+	<node pkg="tf" type="static_transform_publisher" name="gps_2_world_broadcaster" args="0 0 0 0 0 0 1 world gps 100" />
+
+
+  <group ns="dmcts_0">
+    <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
+    <param name="test_environment_number" value="0"/>
+    <param name="agent_index" value="0"/>
+    <param name="world_directory" type="str" value="/home/andy/catkin_ws/src/dmcts_world/worlds/"/>
+    <param name="score_run" type="bool" value="false"/>
+    <param name="display_map" type="bool" value="false"/>
+    <param name="number_of_nodes" value="$(arg num_nodes)"/>
+    <include file="$(find my_quad_controller)/launch/pid_controller_0.launch"/>
+  </group>
+
+  <group ns="dmcts_1">
+    <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
+    <param name="test_environment_number" value="0"/>
+    <param name="agent_index" value="1"/>
+    <param name="world_directory" type="str" value="/home/andy/catkin_ws/src/dmcts_world/worlds/"/>
+    <param name="score_run" type="bool" value="false"/>
+    <param name="display_map" type="bool" value="false"/>
+    <param name="number_of_nodes" value="$(arg num_nodes)"/>
+    <include file="$(find my_quad_controller)/launch/pid_controller_1.launch"/>
+  </group>
+
+</launch>
