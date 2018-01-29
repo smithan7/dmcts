@@ -81,8 +81,8 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 
 	// agent stuff
 	this->n_agent_types = 1; // how many types of agents
-	this->min_travel_vel = 1.9; // 5 - slowest travel speed
-	this->max_travel_vel = 1.95; // 25 - fastest travel speed
+	this->min_travel_vel = 2.3; // 5 - slowest travel speed
+	this->max_travel_vel = 2.7; // 25 - fastest travel speed
 	this->min_agent_work = 100.0; // min amount of work an agent does per second
 	this->max_agent_work = 100.0; // max amount of work an agent does per second
 
@@ -366,7 +366,10 @@ double World::get_team_probability_at_time_except(const double &time, const int 
 
 void World::display_world(const int &ms) {
 
-	if (!this->show_display || !this->initialized) {
+	if (!this->show_display){
+		return;
+	}
+	if(!this->initialized) {
 		ROS_WARN("World::display_world: Agent %i world not initialized", this->my_agent_index);
 		return;
 	}

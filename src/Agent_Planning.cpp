@@ -17,8 +17,8 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 	this->task_selection_method = agent->get_task_selection_method();
 	this->planning_iter = 0;
 	this->last_planning_iter_end = -1;
-	this->initial_search_time = 0.95;
-	this->reoccuring_search_time = 0.95;
+	this->initial_search_time = 0;
+	this->reoccuring_search_time = 0.95 * this->agent->plan_duration.toSec();
 	//this->set_goal(this->agent->get_edge().x);
 }
 
@@ -374,7 +374,11 @@ void Agent_Planning::MCTS_task_selection(){
 	std::vector<double> times;
 	std::vector<double> rewards;
 	this->mcts->get_best_path(best_path, times, rewards);
-	ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
+	std::vector<double> probs(int(best_path.size()), 1.0);
+	
+	this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
+	//ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
+	
 	for(size_t i=0; i<best_path.size(); i++){
 		ROS_WARN("Agent_Planning[%i]: best_path[%i]: %i at time %0.1f with reward %0.1f", this->agent->get_index(), i, best_path[i], times[i], rewards[i]);
 	}
@@ -387,6 +391,7 @@ void Agent_Planning::MCTS_task_selection(){
 	outfile.close();
 	*/
 
+	/*
 	this->agent->get_coordinator()->print_prob_actions();
 	for(int i=0; i<this->world->get_n_agents(); i++){
 		if(i != this->agent->get_index()){
@@ -394,6 +399,7 @@ void Agent_Planning::MCTS_task_selection(){
 			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
 		}
 	}
+	*/
 
 
 	//? - comeback to this after below: why does planning iter for agent 0 only do a few iters but for agent 1 it does 100s?
@@ -403,15 +409,15 @@ void Agent_Planning::MCTS_task_selection(){
 		int max_index;
 		std::vector<std::string> args;
 		std::vector<double> vals;
-		ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+		//ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
 		if (this->mcts->exploit_tree(max_index, args, vals)) {
 			// only make a new goal if the current goai is NOT active
 			if(!this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active()){
 				this->set_goal(max_index);
-				ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+				//ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
 				if (world->are_nbrs(this->agent->get_loc(), max_index)) {
 					// I am nbrs with the next node (my goal) in the tree. Replace root with child and prune
-					ROS_ERROR("Agent_Planning::MCTS_task_selection: am nbrs with next node");
+					//ROS_ERROR("Agent_Planning::MCTS_task_selection: am nbrs with next node");
 					this->mcts->prune_branches();
 					MCTS* old = this->mcts;
 					this->mcts = this->mcts->get_golden_child();
@@ -421,14 +427,14 @@ void Agent_Planning::MCTS_task_selection(){
 				else {
 					// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
 					int ind = int(this->agent->get_goal()->get_path().size()) - 2; //
-					ROS_ERROR("Agent_Planning::MCTS_task_selection: I am NOT nbrs with next node");
+					//ROS_ERROR("Agent_Planning::MCTS_task_selection: I am NOT nbrs with next node");
 					if (ind >= 0) {
 						// update the task index of the first node
-						ROS_ERROR("Agent_Planning::MCTS_task_selection: updating task index");
+						//ROS_ERROR("Agent_Planning::MCTS_task_selection: updating task index");
 						this->mcts->set_task_index(this->agent->get_goal()->get_path()[ind]);
 					}
 					else if (this->agent->get_goal()->get_path().size() == 1) {
-						ROS_ERROR("Agent_Planning::MCTS_task_selection: weird at node behavior");
+						ROS_WARN("Agent_Planning::MCTS_task_selection: weird at node behavior");
 						this->mcts->set_task_index(this->agent->get_goal()->get_index());
 					}
 				}	

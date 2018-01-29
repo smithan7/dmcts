@@ -19,9 +19,10 @@ int main(int argc, char *argv[]){
 	bool score_run = false;
 	int n_nodes = 1;
 	int n_agents = 0;
+	std::string task_selection_method;
 
 	//std::string task_selection_method = "greedy_completion_reward";
-	std::string task_selection_method = "mcts_task_by_completion_reward_impact_optimal";
+	//std::string task_selection_method = "mcts_task_by_completion_reward_impact_optimal";
 	std::string world_directory, map_name;
 
 	ros::param::get("test_environment_number", test_environment_number);
@@ -33,6 +34,7 @@ int main(int argc, char *argv[]){
 	ros::param::get("/dmcts/parameter_seed", parameter_seed);
 	ros::param::get("number_of_nodes", n_nodes);
 	ros::param::get("number_of_agents", n_agents);
+	ros::param::get("coord_method", task_selection_method);
 
 
 	ROS_INFO("World::initializing agent's world");
@@ -44,6 +46,7 @@ int main(int argc, char *argv[]){
 	ROS_INFO("   parameter_seed %i", parameter_seed);
 	ROS_INFO("   n_nodes %i", n_nodes);
 	ROS_INFO("   n_agents %i", n_agents);
+	ROS_INFO("   coord_method %s", task_selection_method.c_str());
 
 	World world = World(nHandle, parameter_seed, display_map, score_run, task_selection_method, world_directory, agent_index, n_nodes, n_agents);
 

@@ -30,9 +30,11 @@ MCTS::MCTS(World* world, Map_Node* task_in, Agent* agent_in, MCTS* parent, const
 		this->max_kid_distance_threshold = 200000.0;// sqrt(pow(world->get_height(), 2) + pow(world->get_width(), 2)); // how far can I travel to a child
 		this->parent = NULL;
 		if (task_in->is_active()) {
+			// this is the root! I am already here!!!
 			this->completion_time = parent_time_in;
 		}
 		else {
+			// this is the root! I am already here!!!
 			this->completion_time = parent_time_in + task_in->get_time_to_complete(this->agent, world);
 		}
 	}
@@ -84,7 +86,7 @@ MCTS::MCTS(World* world, Map_Node* task_in, Agent* agent_in, MCTS* parent, const
 	//std::cerr << "d" << std::endl;
 
 	this->search_type = this->world->get_mcts_search_type();
-	this->beta = 1.41; // ucb = 1.41, d-ucb = 1.41, sw-ucb = 0.705
+	this->beta = 20.0; //1.41; // ucb = 1.41, d-ucb = 1.41, sw-ucb = 0.705
 	this->epsilon = 0.5; // ucb = 0.5, d-ucb = 0.05, sw-ucb = 0.05
 	this->gamma = 0.9; // ucb = n/a~1.0, d-ucb = 0.9, sw-ucb = 0.9
 	this->window_width = 5000; // how far back in my search history should I include searches
@@ -510,7 +512,7 @@ double MCTS::get_expected_value() {
 			}
 			else {
 				this->reward = this->task->get_reward_at_time(this->completion_time);
-				ROS_INFO("has reward %0.2f", this->reward);
+				//ROS_INFO("has reward %0.2f", this->reward);
 				double p_taken = 0.0;
 				if (this->agent->get_coordinator()->get_advertised_task_claim_probability(this->task_index, this->completion_time, p_taken, this->world)) {
 					//if(p_taken > 0.0){

@@ -96,7 +96,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 
 		this->index = index_in;
 		char bf[50];
-		int n = sprintf(bf, "/uav%i/travel_goal", this->index);
+		int n = sprintf(bf, "/dmcts_%i/travel_goal", this->index);
 		this->move_pub = nHandle.advertise<custom_messages::DMCTS_Travel_Goal>(bf, 10);
 		this->coord_pub = nHandle.advertise<custom_messages::DMCTS_Probability>("/dmcts_master/team_coordination", 10);
 		ROS_WARN("still depending on world node to publish tasks");
@@ -107,7 +107,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		//this->clock_sub = nHandle.subscribe("/clock", 1, &Agent::clock_callback, this);
 		this->pulse_sub = nHandle.subscribe("/dmcts_master/pulse", 1, &Agent::pulse_callback, this);
 
-		this->plan_duration = ros::Duration(1.0);
+		this->plan_duration = ros::Duration(0.1);
 		this->act_duration = ros::Duration(0.5);
 		this->send_loc_duration = ros::Duration(1.0);
 		this->task_list_duration = ros::Duration(5.0);
@@ -115,8 +115,6 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->act_timer = nHandle.createTimer(this->act_duration, &Agent::act_timer_callback, this);
 		this->send_loc_timer = nHandle.createTimer(this->send_loc_duration, &Agent::send_loc_service_timer_callback, this);
 		this->task_list_timer = nHandle.createTimer(this->task_list_duration, &Agent::task_list_timer_callback, this);
-
-	
 
 		this->task_list_client = nHandle.serviceClient<custom_messages::Get_Task_List>("/dmcts_master/get_task_list");
 		this->send_loc_client = nHandle.serviceClient<custom_messages::Recieve_Agent_Locs>("/dmcts_master/recieve_agent_locs");
@@ -175,8 +173,13 @@ void Agent::coord_plan_callback(const custom_messages::DMCTS_Probability &msg){
 	//for(size_t i=0; i<msg.claimed_tasks.size(); i++){
 	//	ROS_INFO("Agent::coord_plan_callback: agent[%i], task: %i, time: %0.2f, and prob: %0.2f", msg.agent_index, msg.claimed_tasks[i], msg.claimed_time[i], msg.claimed_probability[i]);
 	//}
+	//ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->get_index(), msg.agent_index);
+	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
+	
 	this->planner->reset_mcts_team_prob_actions(); // this makes my tree re-check the probability
 	this->world->get_agents()[msg.agent_index]->upload_new_plan(msg.claimed_tasks, msg.claimed_time, msg.claimed_probability);
+	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
+	
 }
 
 void Agent::upload_new_plan(const std::vector<int> &claimed_tasks, const std::vector<double> &claimed_time, const std::vector<double> &claimed_probability){
@@ -249,6 +252,13 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 	tf::Matrix3x3(quater).getRPY(r,p,yaw);
 	yaw = angles::normalize_angle_positive(yaw);
 	// end video notes on "Convert quaternion to euler in C++ ROS"
+	//ROS_ERROR("vel: %0.2f, %0.2f", odom_in.twist.twist.linear.x, odom_in.twist.twist.linear.y);
+	if(odom_in.pose.pose.position.z > 1.0){
+		double ts = sqrt(pow(odom_in.twist.twist.linear.x,2) + pow(odom_in.twist.twist.linear.y,2));
+		this->travel_vel = this->travel_vel + 0.001 * (ts - this->travel_vel);
+		this->travel_step = this->travel_vel * world->get_dt();
+		//ROS_INFO("travel_vel: %0.2f", this->travel_vel);
+	}
 	this->update_pose(odom_in.pose.pose.position.x, odom_in.pose.pose.position.y, odom_in.pose.pose.position.z, yaw);
 	//ROS_WARN("Agent[%i]::odom_callback::odom_in: %.2f, %.2f", this->pose->get_x(), this->pose->get_y());
 
@@ -426,13 +436,12 @@ bool Agent::at_goal() { // am I at my goal node?
 }
 
 bool Agent::plan(){
-	ROS_INFO("Agent[%i]::plan: in", this->index);
+	//ROS_INFO("Agent[%i]::plan: in", this->index);
 	if(this->location_initialized){
 		//ROS_INFO("Agent[%i]::plan: this->edge.x: %i", this->index, this->edge.x);
 		this->planner->plan(); // I am not at my goal, select new goal
 		//ROS_INFO("Agent[%i]::plan: out of planner->plan", this->index);
 		this->coordinator->advertise_task_claim(this->world); // select the next edge on the path to goal
-		this->publish_coord_plan();
 		//ROS_INFO("Agent[%i]::plan: out of advertise_task_claim", this->index);
 		return true;
 	}

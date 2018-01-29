@@ -31,7 +31,7 @@ public:
 	ros::Timer plan_timer, act_timer, send_loc_timer, task_list_timer;
 	ros::Publisher move_pub, coord_pub;
 	ros::Subscriber odom_sub, coord_sub, pulse_sub; //clock_sub;
-	ros::ServiceClient task_list_client, work_client, send_loc_client;
+	ros::ServiceClient task_list_client, work_client, send_loc_client, a_star_path_client, kinematic_client;
 	ros::Duration act_duration, plan_duration, send_loc_duration, task_list_duration;
 	void plan_timer_callback(const ros::TimerEvent &e); // use planning method
 	void act_timer_callback(const ros::TimerEvent &e); // move / work

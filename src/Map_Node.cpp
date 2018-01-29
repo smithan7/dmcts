@@ -126,10 +126,10 @@ void Map_Node::activate(World* world) {
 double Map_Node::get_reward_at_time(double time) {
 
 	if (!this->active || time > this->end_time || time < this->start_time || time > this->end_mission_time) {
-		std::cerr << "this->acitve: " << this->active << std::endl;
-		std::cerr << "time > this->end_time: " << time << " > " << this->end_time << std::endl;
-		std::cerr << "time < this->start_time: " << time << " < " << this->start_time << std::endl;
-		std::cerr << "time > this->end_mission_time: " << time << " > " << this->end_mission_time << std::endl;
+		//std::cerr << "this->acitve: " << this->active << std::endl;
+		//std::cerr << "time > this->end_time: " << time << " > " << this->end_time << std::endl;
+		//std::cerr << "time < this->start_time: " << time << " < " << this->start_time << std::endl;
+		//std::cerr << "time > this->end_mission_time: " << time << " > " << this->end_mission_time << std::endl;
 		return 0.0;
 	}
 
