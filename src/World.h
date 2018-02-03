@@ -103,6 +103,10 @@ private:
 	std::vector<Agent*> agents;
 	std::vector<bool> task_status_list;
 	
+	cv::Mat Obs_Mat;
+	std::vector< std::vector<double> > obstacles;
+	void make_obs_mat();
+
 	// initialize everything
 	int param_file_index;
 	std::string world_directory;
