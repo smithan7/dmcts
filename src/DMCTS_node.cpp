@@ -20,6 +20,7 @@ int main(int argc, char *argv[]){
 	int n_nodes = 1;
 	int n_agents = 0;
 	std::string task_selection_method;
+	double desired_alt = 0.0;
 
 	//std::string task_selection_method = "greedy_completion_reward";
 	//std::string task_selection_method = "mcts_task_by_completion_reward_impact_optimal";
@@ -35,6 +36,7 @@ int main(int argc, char *argv[]){
 	ros::param::get("number_of_nodes", n_nodes);
 	ros::param::get("number_of_agents", n_agents);
 	ros::param::get("coord_method", task_selection_method);
+	ros::param::get("desired_altitude", desired_alt);
 
 
 	ROS_INFO("World::initializing agent's world");
@@ -47,8 +49,9 @@ int main(int argc, char *argv[]){
 	ROS_INFO("   n_nodes %i", n_nodes);
 	ROS_INFO("   n_agents %i", n_agents);
 	ROS_INFO("   coord_method %s", task_selection_method.c_str());
+	ROS_INFO("   desired_altitude %.1f", desired_alt);
 
-	World world = World(nHandle, parameter_seed, display_map, score_run, task_selection_method, world_directory, agent_index, n_nodes, n_agents);
+	World world = World(nHandle, parameter_seed, display_map, score_run, task_selection_method, world_directory, agent_index, n_nodes, n_agents, desired_alt);
 
 	// return the control to ROS
 	ros::spin();

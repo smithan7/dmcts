@@ -4,6 +4,7 @@
   <arg name="num_agents"/>
   <arg name="coord_method"/>
   <arg name="agent_index"/>
+  <arg name="desired_altitude"/>
   
   <node pkg="tf" type="static_transform_publisher" name="map_2_world_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
   <node pkg="tf" type="static_transform_publisher" name="gps_2_world_broadcaster" args="0 0 0 0 0 0 1 world gps 100" />
@@ -18,8 +19,9 @@
     <param name="number_of_nodes" value="$(arg num_nodes)"/>
     <param name="number_of_agents" value="$(arg num_agents)"/>
     <param name="coord_method" type="str" value="$(arg coord_method)"/>
+    <param name="desired_altitude" type="double" value="$(arg desired_altitude)"/>
     <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
-    <include file="$(find my_quad_controller)/launch/pid_controller_0.launch"/>
+    <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
   </group>
 
 

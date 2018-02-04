@@ -18,13 +18,14 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in ) {
-	ROS_ERROR("World::my_agent_index_in: %i", my_agent_index_in);
+World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt ) {
+	//ROS_INFO("DMCTS::World::my_agent_index_in: %i", my_agent_index_in);
 	this->initialized = false;
 	this->show_display = display_plot;
 	this->score_run = score_run;
 	this->param_file_index = param_file;
 	this->task_selection_method = task_selection_method;
+	this->desired_alt = desired_alt;
 	this->mcts_search_type = "SW-UCT"; // UCT or SW-UCT
 	this->mcts_reward_type = "normal"; // "impact";
 	this->impact_style = "nn";
@@ -588,7 +589,7 @@ void World::display_world(const int &ms) {
 }
 
 void World::initialize_agents(ros::NodeHandle nHandle) {
-	ROS_ERROR("World::initialize_agents: my agent index is: %i", this->my_agent_index);
+	//ROS_INFO("World::initialize_agents: my agent index is: %i", this->my_agent_index);
 	std::string rf;
 	rf.append(this->world_directory);
 	rf.append("/param_files/");
@@ -639,7 +640,7 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 		if(i == this->my_agent_index){
 			actual_agent = true;
 		}
-		Agent* a = new Agent(nHandle, i, tp, agent_travel_vels[tp], agent_colors[tp], agent_obstacle_costs[tp], agent_work_radii[tp], actual_agent, this);
+		Agent* a = new Agent(nHandle, i, tp, agent_travel_vels[tp], agent_colors[tp], agent_obstacle_costs[tp], agent_work_radii[tp], actual_agent, this, this->desired_alt);
 		this->agents.push_back(a);
 		actual_agent = false;
 	}

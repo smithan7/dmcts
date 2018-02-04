@@ -23,10 +23,11 @@
 
 
 
-Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, const double &travel_vel, const cv::Scalar &color, const bool &pay_obstacle_cost, const double &work_radius, const bool &actual_agent, World* world_in){
+Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, const double &travel_vel, const cv::Scalar &color, const bool &pay_obstacle_cost, const double &work_radius, const bool &actual_agent, World* world_in, const double &des_alt){
 	this->initialized = false;
 	this->map_offset_x = 0.0;
 	this->map_offset_y = 0.0;
+	this->desired_alt = des_alt;
 	// am I the actual agent or a dummy agent?
 	if(!actual_agent){
 		// dummy agent
@@ -104,11 +105,10 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		n = sprintf(bf, "/uav%i//ground_truth/state", this->index);
 		this->odom_sub = nHandle.subscribe(bf, 1, &Agent::odom_callback, this);
 		this->coord_sub = nHandle.subscribe("/dmcts_master/team_coordination", 1, &Agent::coord_plan_callback, this);
-		//this->clock_sub = nHandle.subscribe("/clock", 1, &Agent::clock_callback, this);
 		this->pulse_sub = nHandle.subscribe("/dmcts_master/pulse", 1, &Agent::pulse_callback, this);
 
 		this->plan_duration = ros::Duration(0.1);
-		this->act_duration = ros::Duration(0.5);
+		this->act_duration = ros::Duration(1.0);
 		this->send_loc_duration = ros::Duration(1.0);
 		this->task_list_duration = ros::Duration(5.0);
 		this->plan_timer = nHandle.createTimer(this->plan_duration, &Agent::plan_timer_callback, this);
@@ -125,6 +125,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->edge_progress = 1.0;
 		this->index = index;
 		this->collected_reward = 0.0;
+		this->run_status = -1;
 
 		this->work_radius = work_radius;
 		this->type = type;
@@ -207,7 +208,7 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 		}
 	}
 	else{
-		ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
+		//ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
 	}
 }
 
@@ -232,13 +233,23 @@ void Agent::send_loc_service_timer_callback(const ros::TimerEvent &e){
 	srv.request.yaw = this->pose->get_yaw();
 	srv.request.edge_x = this->edge.x;
 	srv.request.edge_y = this->edge.y;
-	
+	srv.request.status = int8_t(this->run_status);
+
+	//ROS_INFO("DMCTS::Agent::send_loc_service_timer_callback: req.status[%i]: %i", this->index, this->run_status);
+	//ROS_INFO("   Z: = %0.1f and desired_alt = %0.1f", this->pose->get_z(), this->desired_alt);
 	if (this->send_loc_client.call(srv)){
 	    if(srv.response.f){
 	    	this->m_node_initialized = true;
+	    	this->run_status = 1; // all good, run
+	    }
+	    else{
+	    	// problem, wait
+	    	this->run_status = 0;
 	    }
 	}
 	else{
+		// had a problem, go back to waiting
+		this->run_status = 0;
 	    ROS_ERROR("Agent[%i]::send_loc_service_timer_callback: Failed to call service: Recieve_Agent_Locs", this->index);
 	    return;
 	}
@@ -253,12 +264,20 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 	yaw = angles::normalize_angle_positive(yaw);
 	// end video notes on "Convert quaternion to euler in C++ ROS"
 	//ROS_ERROR("vel: %0.2f, %0.2f", odom_in.twist.twist.linear.x, odom_in.twist.twist.linear.y);
-	if(odom_in.pose.pose.position.z > 1.0){
+
+	if(abs(odom_in.pose.pose.position.z - this->desired_alt) < 1.0){
 		double ts = sqrt(pow(odom_in.twist.twist.linear.x,2) + pow(odom_in.twist.twist.linear.y,2));
 		this->travel_vel = this->travel_vel + 0.001 * (ts - this->travel_vel);
 		this->travel_step = this->travel_vel * world->get_dt();
 		//ROS_INFO("travel_vel: %0.2f", this->travel_vel);
+		if(this->run_status == -1){
+			this->run_status = 0; // I have reached altitude
+		}
 	}
+	else{ // I am no longer at altitude
+		this->run_status = -1;
+	}
+
 	this->update_pose(odom_in.pose.pose.position.x, odom_in.pose.pose.position.y, odom_in.pose.pose.position.z, yaw);
 	//ROS_WARN("Agent[%i]::odom_callback::odom_in: %.2f, %.2f", this->pose->get_x(), this->pose->get_y());
 
@@ -452,6 +471,19 @@ bool Agent::plan(){
 }
 
 bool Agent::act() {
+	if(this->run_status != 1){
+		if(this->run_status == 0){
+			ROS_WARN("DMCTS::Agent::act: %i is not ready to run: alt info: %0.1f / %0.1f", this->index, this->pose->get_z(), this->desired_alt);
+		}
+		else if(this->run_status == 0){
+			ROS_WARN("DMCTS::Agent::act: %i is waiting to at travel altitude", this->index);	
+		}
+		else{
+			ROS_ERROR("DMCTS::Agent::act: BAD run_status");
+		}
+		return true;
+	}
+
 	//ROS_INFO("Agent[%i]::act: in", this->index);
 	// am  I at a node?
 	//ROS_WARN("At node: %i", this->edge.x);

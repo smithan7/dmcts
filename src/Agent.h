@@ -50,7 +50,7 @@ public:
 	double map_offset_x, map_offset_y;
 
 	// functions
-	Agent(ros::NodeHandle nHandle, const int &index, const int &type, const double &travel_vel, const cv::Scalar &color, const bool &pay_obstacle_cost, const double &work_radius, const bool &actual_agent, World* world_in);
+	Agent(ros::NodeHandle nHandle, const int &index, const int &type, const double &travel_vel, const cv::Scalar &color, const bool &pay_obstacle_cost, const double &work_radius, const bool &actual_agent, World* world_in, const double &des_alt);
 	bool at_node(int node);
 	bool act();
 	bool plan();
@@ -96,6 +96,7 @@ public:
 private:
 	// my location
 	Pose* pose;
+	double desired_alt;
 
 	// planning and coordinator
 	Goal* goal_node;
@@ -132,6 +133,7 @@ private:
 	
 	// working and planning
 	void work_on_task(); // work on the task I am at
+	int run_status;
 	
 	// moving and path planning 
 	void move_along_edge(); // move along the current edge
