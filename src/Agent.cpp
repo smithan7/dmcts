@@ -317,7 +317,7 @@ void Agent::publish_work_request(const int &goal_node ){
 	srv.request.xLoc = this->pose->get_x();
 	srv.request.yLoc = this->pose->get_y();
 	srv.request.a_type = this->type;
-	srv.request.c_time = 0.0;
+	srv.request.c_time = this->world->get_c_time();
 	srv.request.work_rate = this->act_duration.toSec();
 	if (this->work_client.call(srv)){
 	    int a;
