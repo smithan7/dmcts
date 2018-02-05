@@ -244,6 +244,7 @@ void Agent::send_loc_service_timer_callback(const ros::TimerEvent &e){
 	    }
 	    else{
 	    	// problem, wait
+	    	ROS_WARN("DMCTS::Agent[%i]::send_loc_service_timer_callback: Waiting to run (%i)", this->index, this->run_status);
 	    	this->run_status = 0;
 	    }
 	}
@@ -471,8 +472,8 @@ bool Agent::plan(){
 }
 
 bool Agent::act() {
-	if(this->run_status != 1){
-		if(this->run_status == 0){
+	if(this->run_status < 1){
+		if(this->run_status == -1){
 			ROS_WARN("DMCTS::Agent::act: %i is not ready to run: alt info: %0.1f / %0.1f", this->index, this->pose->get_z(), this->desired_alt);
 		}
 		else if(this->run_status == 0){

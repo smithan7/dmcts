@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(dmcts)
 
+set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
+
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
 
@@ -8,16 +10,17 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  custom_messages
   roscpp
   rospy
   std_msgs
-  cv_bridge
+  custom_messages
+  cv_bridge 
 )
 
 ## include opencv
-find_package(OpenCV 3.2.0 REQUIRED)
-include_directories(${OpenCV_INCLUDE_DIRS})
+#find_package(OpenCV 3.2.0 REQUIRED)
+find_package(OpenCV 3.2.0 REQUIRED COMPONENTS core highgui imgproc imgcodecs)
+#include_directories(${OpenCV_INCLUDE_DIRS})
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -140,7 +143,7 @@ add_executable(dmcts
 	src/TreeNode.cpp
 	src/World.cpp)
 
-target_link_libraries(dmcts ${catkin_LIBRARIES})
+target_link_libraries(dmcts ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}

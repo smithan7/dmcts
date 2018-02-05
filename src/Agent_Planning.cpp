@@ -379,9 +379,18 @@ void Agent_Planning::MCTS_task_selection(){
 	this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
 	//ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
 	
+	/*
+	I am not properly clearing the old probabilities from agent coordinator of my coworkers, somehow they are still there so rewards are
+	all 0. Additionally, I am not accounting for the time it takes to reach node start 0 so all times are off and I am not elgible for reward
+	at the time I will it reach it; consequently the start is broadcast as having remaining reward while all otehrs are null and consequently
+	causes all agents to go there.  
+	*/
+	
+	std::cout << "Agent_Planning[" << this->agent->get_index() << "]: best_path: ";
 	for(size_t i=0; i<best_path.size(); i++){
-		ROS_WARN("Agent_Planning[%i]: best_path[%i]: %i at time %0.1f with reward %0.1f", this->agent->get_index(), i, best_path[i], times[i], rewards[i]);
+		std::cout << " (" << i << ": " << best_path[i] << " @ " << times[i] << " for " << rewards[i] << " with probs: " << probs[i] << "), ";
 	}
+	std::cout << std::endl;
 	/*
 	std::ofstream outfile;
 	outfile.open("planning_time.txt", std::ios::app);
@@ -391,16 +400,16 @@ void Agent_Planning::MCTS_task_selection(){
 	outfile.close();
 	*/
 
-	/*
-	this->agent->get_coordinator()->print_prob_actions();
-	for(int i=0; i<this->world->get_n_agents(); i++){
-		if(i != this->agent->get_index()){
-			ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
-			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
+	if(this->agent->get_index() == 0){
+		this->agent->get_coordinator()->print_prob_actions();
+		for(int i=0; i<this->world->get_n_agents(); i++){
+			if(i != this->agent->get_index()){
+				ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
+				this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
+			}
 		}
 	}
-	*/
-
+	
 
 	//? - comeback to this after below: why does planning iter for agent 0 only do a few iters but for agent 1 it does 100s?
 

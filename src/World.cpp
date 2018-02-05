@@ -726,6 +726,7 @@ void World::initialize_PRM() {
 			double obs_cost = min_dist*(1+mean_val);
 			this->nodes[i]->add_nbr(mindex, min_dist, obs_cost);
 			this->nodes[mindex]->add_nbr(i, min_dist, obs_cost);
+			//ROS_INFO("%i -> %i: %0.1f", i, mindex, min_dist);
 		}
 	}
 }
@@ -831,6 +832,7 @@ void World::initialize_nodes_and_tasks() {
 		int task_type = rand() % n_task_types;
 		Map_Node* n = new Map_Node(x, y, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
 		this->nodes.push_back(n);
+		//std::cout << "( " << i << ": " << x << ", " << y << "), ";
 	}
 }
 
