@@ -5,6 +5,10 @@
   <arg name="coord_method"/>
   <arg name="agent_index"/>
   <arg name="desired_altitude"/>
+  <arg name="p_task_initially_active"/>
+  <arg name="pay_obstacle_costs"/>
+  <arg name="not_simulation"/>
+  <arg name="cruising_speed"/>
   
   <node pkg="tf" type="static_transform_publisher" name="map_2_world_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
   <node pkg="tf" type="static_transform_publisher" name="gps_2_world_broadcaster" args="0 0 0 0 0 0 1 world gps 100" />
@@ -20,8 +24,13 @@
     <param name="number_of_agents" value="$(arg num_agents)"/>
     <param name="coord_method" type="str" value="$(arg coord_method)"/>
     <param name="desired_altitude" type="double" value="$(arg desired_altitude)"/>
-    <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
-    <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
+    <param name="p_task_initially_active" type="double" value="$(arg p_task_initially_active)"/>
+    <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
+    <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
+    <group if="$(arg not_simulation)">
+        <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
+        <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
+    </group>
   </group>
 
 

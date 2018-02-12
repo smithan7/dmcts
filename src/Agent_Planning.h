@@ -47,6 +47,7 @@ private:
 	void select_task_by_impact_completion_value();
 
 	// MCTS
+	void new_MCTS_task_by_completion_reward();
 	void MCTS_task_selection();
 	void MCTS_task_by_completion_reward();
 	void MCTS_task_by_completion_value();

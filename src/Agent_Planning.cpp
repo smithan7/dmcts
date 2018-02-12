@@ -3,8 +3,10 @@
 #include "Map_Node.h"
 #include "Agent.h"
 #include "World.h"
-#include "mcts.h"
+#include "MCTS.h"
+#include "D_MCTS.h"
 #include "Goal.h"
+#include "Pose.h"
 
 #include <iostream>
 #include <fstream>
@@ -17,9 +19,8 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 	this->task_selection_method = agent->get_task_selection_method();
 	this->planning_iter = 0;
 	this->last_planning_iter_end = -1;
-	this->initial_search_time = 0;
+	this->initial_search_time = 2.0;//this->agent->plan_duration.toSec();
 	this->reoccuring_search_time = 0.95 * this->agent->plan_duration.toSec();
-	//this->set_goal(this->agent->get_edge().x);
 }
 
 
@@ -99,6 +100,11 @@ void Agent_Planning::plan() {
 		this->world->set_mcts_reward_type("normal");
 		this->MCTS_task_by_completion_reward();
 	}
+	// select task by MCTS using reward at time of completion and gradient descent on method
+	else if (this->task_selection_method.compare("mcts_task_by_completion_reward_gradient") == 0) {
+		this->world->set_mcts_reward_type("normal");
+		this->new_MCTS_task_by_completion_reward();
+	}
 	// select task by MCTS using value at time of completion
 	else if (this->task_selection_method.compare("mcts_task_by_completion_value") == 0) {
 		this->world->set_mcts_reward_type("normal");
@@ -138,7 +144,7 @@ void Agent_Planning::select_task_by_impact_completion_reward() {
 			double e_dist = double(INFINITY);
 			// get euclidean dist first
 			if (world->dist_between_nodes(this->agent->get_edge().x, i, e_dist)) {
-				double e_time = e_dist / this->agent->get_travel_step();
+				double e_time = e_dist / this->agent->get_travel_vel();
 				double w_time = this->world->get_nodes()[i]->get_time_to_complete(this->agent, this->world);
 				double e_reward = this->world->get_nodes()[i]->get_reward_at_time(world->get_c_time() + e_time + w_time);
 				// is my euclidean travel time reward better?
@@ -148,7 +154,7 @@ void Agent_Planning::select_task_by_impact_completion_reward() {
 					double a_dist = double(INFINITY);
 					if (world->a_star(this->agent->get_edge().x, i, this->agent->get_pay_obstacle_cost(), path, a_dist)) {
 						// am I a star better?
-						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_step();
+						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_vel();
 						double arr_reward = this->world->get_nodes()[i]->get_reward_at_time(arr_time);
 						double comp_time = arr_time + w_time;
 						double comp_reward = this->world->get_nodes()[i]->get_reward_at_time(comp_time);
@@ -222,7 +228,7 @@ void Agent_Planning::select_task_by_impact_completion_value() {
 			double e_dist = double(INFINITY);
 			// get euclidean dist first
 			if (world->dist_between_nodes(this->agent->get_edge().x, i, e_dist)) {
-				double e_time = e_dist / this->agent->get_travel_step();
+				double e_time = e_dist / this->agent->get_travel_vel();
 				double w_time = this->world->get_nodes()[i]->get_time_to_complete(this->agent, this->world);
 				double e_reward = this->world->get_nodes()[i]->get_reward_at_time(world->get_c_time() + e_time + w_time);
 				double e_value = e_reward - (e_time + w_time);
@@ -233,11 +239,11 @@ void Agent_Planning::select_task_by_impact_completion_value() {
 					double a_dist = double(INFINITY);
 					if (world->a_star(this->agent->get_edge().x, i, this->agent->get_pay_obstacle_cost(), path, a_dist)) {
 						// am I a star better?
-						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_step();
+						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_vel();
 						double arr_reward = this->world->get_nodes()[i]->get_reward_at_time(arr_time);
 						double comp_time = arr_time + w_time;
 						double comp_reward = this->world->get_nodes()[i]->get_reward_at_time(comp_time);
-						double comp_value = comp_reward - (a_dist / this->agent->get_travel_step() + w_time);
+						double comp_value = comp_reward - (a_dist / this->agent->get_travel_vel() + w_time);
 						// is it still the best with A*?
 						if (comp_value > max_comp_impact) {
 							// is it taken by someone else?
@@ -245,7 +251,7 @@ void Agent_Planning::select_task_by_impact_completion_value() {
 							if (my_coord->get_advertised_task_claim_probability(i, comp_time, prob_taken, this->world)) {
 								if (prob_taken == 0.0) {
 									double impact = my_coord->get_reward_impact(i, this->agent->get_index(), comp_time, this->world);
-									double impact_value = impact - (a_dist / this->agent->get_travel_step() + w_time);
+									double impact_value = impact - (a_dist / this->agent->get_travel_vel() + w_time);
 									if (impact_value > max_comp_impact) {}
 									// if not taken, then accept as possible goal
 
@@ -294,25 +300,139 @@ void Agent_Planning::select_task_by_impact_completion_value() {
 
 
 void Agent_Planning::MCTS_task_by_completion_reward() {
-	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
 	this->MCTS_task_selection();
 	//std::cout << "mcts_by_comp_reward::planning_time: " << double(clock()) / double(CLOCKS_PER_SEC) - s_time << std::endl;
 }
 
+void Agent_Planning::new_MCTS_task_by_completion_reward() {
+	//ROS_INFO("Agent_Planning::MCTS_task_selection: in 'MCTS_task_selection'");
+	double reward_in = 0.0;
+	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
+	std::vector<bool> task_list;
+	std::vector<int> task_set;
+	this->world->get_task_status_list(task_list, task_set);
+	//ROS_INFO("Agent_Planning::MCTS_task_selection: got task_list (%i) / task_set (%i)", int(task_list.size()), int(task_set.size()));
+	if (!this->mcts) {
+		this->mcts = new MCTS(this->world, this->world->get_nodes()[this->get_agent()->get_loc()], this->get_agent(), NULL, 0, this->world->get_c_time());
+	}
+	//ROS_INFO("Agent_Planning::MCTS_task_selection: finished initializing MCTS");
+
+	// task of root is marked complete
+	task_list[this->mcts->get_task_index()] = false;
+	while( double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
+		this->planning_iter++;
+		int depth_in = 0;
+		this->mcts->new_search_from_root(task_list, task_set, last_planning_iter_end, planning_iter);
+	}
+	//ROS_INFO("Agent_Planning::MCTS_task_selection: finished searching tree for 1 inter");
+	int planning_iters = this->planning_iter - this->last_planning_iter_end;
+	std::cout << "planning_iters: " << planning_iters << std::endl;
+	this->last_planning_iter_end = this->planning_iter;
+
+	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
+	this->mcts->sample_tree_and_advertise_task_probabilities(this->agent->get_coordinator());
+	//printf("sampling time: %0.2f \n", double(clock()) / double(CLOCKS_PER_SEC) - s_time);
+	std::vector<int> best_path;
+	std::vector<double> times;
+	std::vector<double> rewards;
+	this->mcts->get_best_path(best_path, times, rewards);
+	
+	//std::vector<double> probs(int(best_path.size()), 1.0);
+	//this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
+	//ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
+
+	//std::cout << "Agent_Planning[" << this->agent->get_index() << "]: best_path: ";
+	//for(size_t i=0; i<best_path.size(); i++){
+	//	std::cout << " (" << i << ": " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
+	//}
+	//std::cout << std::endl;
+	
+	/*
+	std::ofstream outfile;
+	outfile.open("planning_time.txt", std::ios::app);
+	char buffer[50];
+	int n = sprintf_s(buffer, "%i, %0.6f\n", planning_iters, double(clock()) / double(CLOCKS_PER_SEC) - s_time);
+	outfile << buffer;
+	outfile.close();
+	*/
+
+	/*
+	ROS_INFO("Agent[%i]'s coord tree", this->agent->get_index());
+	this->agent->get_coordinator()->print_prob_actions();
+	for(int i=0; i<this->world->get_n_agents(); i++){
+		if(i != this->agent->get_index()){
+			ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
+			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
+		}
+	}
+	*/
+	
+	//? - comeback to this after below: why does planning iter for agent 0 only do a few iters but for agent 1 it does 100s?
+
+	if(this->world->get_c_time() > this->initial_search_time){
+		if (this->agent->get_at_node()) {
+			// I am at either edge.x / edge.y
+			int max_index;
+			std::vector<std::string> args;
+			std::vector<double> vals;
+			ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+			//std::cout << "Agent_Planning[" << this->agent->get_index() << "]: best_path: ";
+			//for(size_t i=0; i<best_path.size(); i++){
+			//	std::cout << " (" << i << ": " << best_path[i] << " @ " << times[i] << " for " << rewards[i] << " with probs: " << probs[i] << "), ";
+			//}
+			//std::cout <<std::endl;
+			if (this->mcts->exploit_tree(max_index, args, vals)) {
+				ROS_INFO("Agent_Planning::MCTS_task_selection: exploit_tree succesful with max_index: %i", max_index);
+				// only make a new goal if the current goai is NOT active
+				ROS_INFO("Agent_Planning::MCTS_task_selection: checking if %i is active, it is %i", this->agent->get_goal()->get_index(), this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active());
+				if(this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active() == 0){
+					ROS_WARN("Agent_Planning::MCTS_task_selection: goal is NOT active");
+					ROS_INFO("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with A COMPLETED goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+					this->set_goal(max_index);
+					ROS_INFO("Agent_Planning::MCTS_task_selection: am nbrs with next node, resetting mcts root");
+					this->mcts->prune_branches();
+					MCTS* old = this->mcts;
+					this->mcts = this->mcts->get_golden_child();
+					this->mcts->set_as_root();
+				}
+
+				if (world->are_nbrs(this->agent->get_loc(), max_index) ) {
+					// I am nbrs with the next node (my goal) in the tree. Replace root with child and prune
+
+				}
+				else {
+					// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
+					this->mcts->set_task_index(this->agent->get_edge().y);
+					/*
+					int ind = int(this->agent->get_goal()->get_path().size()) - 2; //
+					ROS_INFO("Agent_Planning::MCTS_task_selection: I am NOT nbrs with next node");
+					if (ind >= 0) {
+						// update the task index of the first node
+						ROS_INFO("Agent_Planning::MCTS_task_selection: updating task index");
+						this->mcts->set_task_index(this->agent->get_goal()->get_path()[ind]);
+					}
+					else if (this->agent->get_goal()->get_path().size() == 1) {
+						ROS_INFO("Agent_Planning::MCTS_task_selection: weird at node behavior");
+						this->mcts->set_task_index(this->agent->get_goal()->get_index());
+					}
+					*/
+				}	
+			}
+		}
+	}
+}
+
 
 void Agent_Planning::MCTS_task_by_completion_value() {
-	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
 	this->MCTS_task_selection();
 	//std::cout << "mcts_by_comp_value::planning_time: " << double(clock()) / double(CLOCKS_PER_SEC) - s_time << std::endl;
 }
 
 void Agent_Planning::MCTS_task_by_completion_reward_impact() {
-	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
 	this->MCTS_task_selection();
 }
 
 void Agent_Planning::MCTS_task_by_completion_value_impact() {
-	//double s_time = double(clock()) / double(CLOCKS_PER_SEC);
 	//ROS_INFO("Agent_Planning::MCTS_task_by_completion_value_impact: going into 'MCTS_task_selection'");
 	this->MCTS_task_selection();
 	//ROS_INFO("Agent_Planning::MCTS_task_by_completion_value_impact: out of 'MCTS_task_selection'");
@@ -334,28 +454,13 @@ void Agent_Planning::MCTS_task_selection(){
 	this->world->get_task_status_list(task_list, task_set);
 	//ROS_INFO("Agent_Planning::MCTS_task_selection: got task_list (%i) / task_set (%i)", int(task_list.size()), int(task_set.size()));
 	if (!this->mcts) {
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: !this->mcts");
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: %i", this->world->get_nodes()[this->get_agent()->get_loc()]);
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: %0.2f", this->world->get_c_time());
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: %i", this->get_agent());
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: %i", this->world);
 		this->mcts = new MCTS(this->world, this->world->get_nodes()[this->get_agent()->get_loc()], this->get_agent(), NULL, 0, this->world->get_c_time());
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: initialized mcts");
-		task_list[this->mcts->get_task_index()] = false;
-		while (double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->initial_search_time) {
-			//ROS_INFO("Agent_Planning::MCTS_task_selection: got task_list (%i) / task_set (%i)", int(task_list.size()), int(task_set.size()));
-			this->planning_iter++;
-			int depth_in = 0;
-			this->mcts->search_from_root(task_list, task_set, last_planning_iter_end, planning_iter);
-		}
-		//ROS_INFO("Agent_Planning::MCTS_task_selection: performed initial search");
 	}
 	//ROS_INFO("Agent_Planning::MCTS_task_selection: finished initializing MCTS");
 
-	// TODO implement impact rewards to account for future actions of others
-
 	// TODO implement moving average on probability of bid
 
+	// task of root is marked complete
 	task_list[this->mcts->get_task_index()] = false;
 	while( double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
 		this->planning_iter++;
@@ -363,8 +468,8 @@ void Agent_Planning::MCTS_task_selection(){
 		this->mcts->search_from_root(task_list, task_set, last_planning_iter_end, planning_iter);
 	}
 	//ROS_INFO("Agent_Planning::MCTS_task_selection: finished searching tree for 1 inter");
-	//std::cout << "planning_iter: " << planning_iter << std::endl;
 	int planning_iters = this->planning_iter - this->last_planning_iter_end;
+	std::cout << "planning_iters: " << planning_iters << std::endl;
 	this->last_planning_iter_end = this->planning_iter;
 
 	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
@@ -374,23 +479,17 @@ void Agent_Planning::MCTS_task_selection(){
 	std::vector<double> times;
 	std::vector<double> rewards;
 	this->mcts->get_best_path(best_path, times, rewards);
-	std::vector<double> probs(int(best_path.size()), 1.0);
 	
-	this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
+	//std::vector<double> probs(int(best_path.size()), 1.0);
+	//this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
 	//ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
+
+	//std::cout << "Agent_Planning[" << this->agent->get_index() << "]: best_path: ";
+	//for(size_t i=0; i<best_path.size(); i++){
+	//	std::cout << " (" << i << ": " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
+	//}
+	//std::cout << std::endl;
 	
-	/*
-	I am not properly clearing the old probabilities from agent coordinator of my coworkers, somehow they are still there so rewards are
-	all 0. Additionally, I am not accounting for the time it takes to reach node start 0 so all times are off and I am not elgible for reward
-	at the time I will it reach it; consequently the start is broadcast as having remaining reward while all otehrs are null and consequently
-	causes all agents to go there.  
-	*/
-	
-	std::cout << "Agent_Planning[" << this->agent->get_index() << "]: best_path: ";
-	for(size_t i=0; i<best_path.size(); i++){
-		std::cout << " (" << i << ": " << best_path[i] << " @ " << times[i] << " for " << rewards[i] << " with probs: " << probs[i] << "), ";
-	}
-	std::cout << std::endl;
 	/*
 	std::ofstream outfile;
 	outfile.open("planning_time.txt", std::ios::app);
@@ -400,58 +499,70 @@ void Agent_Planning::MCTS_task_selection(){
 	outfile.close();
 	*/
 
-	if(this->agent->get_index() == 0){
-		this->agent->get_coordinator()->print_prob_actions();
-		for(int i=0; i<this->world->get_n_agents(); i++){
-			if(i != this->agent->get_index()){
-				ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
-				this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
-			}
+	/*
+	ROS_INFO("Agent[%i]'s coord tree", this->agent->get_index());
+	this->agent->get_coordinator()->print_prob_actions();
+	for(int i=0; i<this->world->get_n_agents(); i++){
+		if(i != this->agent->get_index()){
+			ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
+			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
 		}
 	}
+	*/
 	
-
 	//? - comeback to this after below: why does planning iter for agent 0 only do a few iters but for agent 1 it does 100s?
 
-	if (this->agent->get_at_node()) {
-		// I am at a node
-		int max_index;
-		std::vector<std::string> args;
-		std::vector<double> vals;
-		//ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
-		if (this->mcts->exploit_tree(max_index, args, vals)) {
-			// only make a new goal if the current goai is NOT active
-			if(!this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active()){
-				this->set_goal(max_index);
-				//ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
-				if (world->are_nbrs(this->agent->get_loc(), max_index)) {
-					// I am nbrs with the next node (my goal) in the tree. Replace root with child and prune
-					//ROS_ERROR("Agent_Planning::MCTS_task_selection: am nbrs with next node");
+	if(this->world->get_c_time() > this->initial_search_time){
+		if (this->agent->get_at_node()) {
+			// I am at either edge.x / edge.y
+			int max_index;
+			std::vector<std::string> args;
+			std::vector<double> vals;
+			ROS_ERROR("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+			//std::cout << "Agent_Planning[" << this->agent->get_index() << "]: best_path: ";
+			//for(size_t i=0; i<best_path.size(); i++){
+			//	std::cout << " (" << i << ": " << best_path[i] << " @ " << times[i] << " for " << rewards[i] << " with probs: " << probs[i] << "), ";
+			//}
+			//std::cout <<std::endl;
+			if (this->mcts->exploit_tree(max_index, args, vals)) {
+				ROS_INFO("Agent_Planning::MCTS_task_selection: exploit_tree succesful with max_index: %i", max_index);
+				// only make a new goal if the current goai is NOT active
+				ROS_INFO("Agent_Planning::MCTS_task_selection: checking if %i is active, it is %i", this->agent->get_goal()->get_index(), this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active());
+				if(this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active() == 0){
+					ROS_WARN("Agent_Planning::MCTS_task_selection: goal is NOT active");
+					ROS_INFO("Agent_Planning::MCTS_task_selection: I am at node: %i/%i with A COMPLETED goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+					this->set_goal(max_index);
+					ROS_INFO("Agent_Planning::MCTS_task_selection: am nbrs with next node, resetting mcts root");
 					this->mcts->prune_branches();
 					MCTS* old = this->mcts;
 					this->mcts = this->mcts->get_golden_child();
 					this->mcts->set_as_root();
-					delete old;
+				}
+
+				if (world->are_nbrs(this->agent->get_loc(), max_index) ) {
+					// I am nbrs with the next node (my goal) in the tree. Replace root with child and prune
+
 				}
 				else {
 					// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
+					this->mcts->set_task_index(this->agent->get_edge().y);
+					/*
 					int ind = int(this->agent->get_goal()->get_path().size()) - 2; //
-					//ROS_ERROR("Agent_Planning::MCTS_task_selection: I am NOT nbrs with next node");
+					ROS_INFO("Agent_Planning::MCTS_task_selection: I am NOT nbrs with next node");
 					if (ind >= 0) {
 						// update the task index of the first node
-						//ROS_ERROR("Agent_Planning::MCTS_task_selection: updating task index");
+						ROS_INFO("Agent_Planning::MCTS_task_selection: updating task index");
 						this->mcts->set_task_index(this->agent->get_goal()->get_path()[ind]);
 					}
 					else if (this->agent->get_goal()->get_path().size() == 1) {
-						ROS_WARN("Agent_Planning::MCTS_task_selection: weird at node behavior");
+						ROS_INFO("Agent_Planning::MCTS_task_selection: weird at node behavior");
 						this->mcts->set_task_index(this->agent->get_goal()->get_index());
 					}
+					*/
 				}	
 			}
-			
 		}
-	}
-
+}
 }
 
 void Agent_Planning::set_goal(int goal_index) {
@@ -666,7 +777,7 @@ void Agent_Planning::select_greedy_task_by_arrival_reward() {
 			double e_dist = double(INFINITY);
 			// get euclidean dist first
 			if (world->dist_between_nodes(this->agent->get_edge().x, i, e_dist)) {
-				double e_time = e_dist / this->agent->get_travel_step();
+				double e_time = e_dist / this->agent->get_travel_vel();
 				double w_time = this->world->get_nodes()[i]->get_time_to_complete(this->agent, this->world);
 				double e_reward = this->world->get_nodes()[i]->get_reward_at_time(world->get_c_time() + e_time + w_time);
 				// is my euclidean travel time reward better?
@@ -676,7 +787,7 @@ void Agent_Planning::select_greedy_task_by_arrival_reward() {
 					double a_dist = double(INFINITY);
 					if (world->a_star(this->agent->get_edge().x, i, this->agent->get_pay_obstacle_cost(), path, a_dist)) {
 						// am I a star better?
-						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_step();
+						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_vel();
 						double arr_reward = this->world->get_nodes()[i]->get_reward_at_time(arr_time);
 						if (arr_reward > max_arr_reward) {
 							// is it taken by someone else?
@@ -743,9 +854,9 @@ void Agent_Planning::select_greedy_task_by_completion_reward() {
 			// get euclidean dist first
 			if (world->dist_between_nodes(this->agent->get_edge().x, i, e_dist)) {
 				//std::cerr << "dist: " << e_dist << std::endl;
-				//std::cerr << "travel step: " << this->agent->get_travel_step() << std::endl;
+				//std::cerr << "travel vel: " << this->agent->get_travel_vel() << std::endl;
 				//std::cout << "   " << i << " e_dist: " << e_dist << std::endl;
-				double e_time = e_dist / this->agent->get_travel_step();
+				double e_time = e_dist / this->agent->get_travel_vel();
 				//std::cerr << "e_time: " << e_time << std::endl;
 				double w_time = this->world->get_nodes()[i]->get_time_to_complete(this->agent, this->world);
 				//std::cerr << "w_time: " << w_time << std::endl;
@@ -761,7 +872,7 @@ void Agent_Planning::select_greedy_task_by_completion_reward() {
 					if (world->a_star(this->agent->get_edge().x, i, this->agent->get_pay_obstacle_cost(), path, a_dist)) {
 						//std::cerr << "a_dist: " << a_dist << std::endl;
 						// am I a star better?
-						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_step();
+						double arr_time = this->world->get_c_time() + a_dist / this->agent->get_travel_vel();
 						double arr_reward = this->world->get_nodes()[i]->get_reward_at_time(arr_time);
 						double comp_time = arr_time + w_time;
 						double comp_reward = this->world->get_nodes()[i]->get_reward_at_time(comp_time);
@@ -859,7 +970,7 @@ void Agent_Planning::select_task_by_completion_value() {
 			double e_dist = double(INFINITY);
 			// get euclidean dist first
 			if (world->dist_between_nodes(this->agent->get_edge().x, i, e_dist)) {
-				double e_time = e_dist / this->agent->get_travel_step();
+				double e_time = e_dist / this->agent->get_travel_vel();
 				double w_time = this->world->get_nodes()[i]->get_time_to_complete(this->agent, this->world);
 				double e_reward = this->world->get_nodes()[i]->get_reward_at_time(world->get_c_time() + e_time + w_time);
 				double e_value = e_reward - (e_time + w_time);
@@ -870,7 +981,7 @@ void Agent_Planning::select_task_by_completion_value() {
 					double a_dist = double(INFINITY);
 					if (world->a_star(this->agent->get_edge().x, i, this->agent->get_pay_obstacle_cost(), path, a_dist)) {
 						// am I a star better?
-						double a_time = a_dist / this->agent->get_travel_step();
+						double a_time = a_dist / this->agent->get_travel_vel();
 						double arr_time = this->world->get_c_time() + a_time;
 						double arr_reward = this->world->get_nodes()[i]->get_reward_at_time(arr_time);
 						double comp_time = arr_time + w_time;

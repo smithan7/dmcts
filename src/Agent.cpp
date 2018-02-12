@@ -104,10 +104,10 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		//this->work_complete_pub = nHandle.advertise<custom_messages::DMCTS_Work_Complete>("/dmcts_master/work_complete", 10);
 		n = sprintf(bf, "/uav%i//ground_truth/state", this->index);
 		this->odom_sub = nHandle.subscribe(bf, 1, &Agent::odom_callback, this);
-		this->coord_sub = nHandle.subscribe("/dmcts_master/team_coordination", 1, &Agent::coord_plan_callback, this);
+		this->coord_sub = nHandle.subscribe("/dmcts_master/team_coordination", 10, &Agent::coord_plan_callback, this);
 		this->pulse_sub = nHandle.subscribe("/dmcts_master/pulse", 1, &Agent::pulse_callback, this);
 
-		this->plan_duration = ros::Duration(0.1);
+		this->plan_duration = ros::Duration(0.5);
 		this->act_duration = ros::Duration(1.0);
 		this->send_loc_duration = ros::Duration(1.0);
 		this->task_list_duration = ros::Duration(5.0);
@@ -130,7 +130,6 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->work_radius = work_radius;
 		this->type = type;
 		this->travel_vel = travel_vel;
-		this->travel_step = travel_vel * world->get_dt();
 		this->pay_obstacle_cost = pay_obstacle_cost;
 		this->color = color;
 		this->n_tasks =  this->world->get_n_nodes();
@@ -168,11 +167,14 @@ void Agent::publish_coord_plan(){
 }
 
 void Agent::coord_plan_callback(const custom_messages::DMCTS_Probability &msg){
+	//ROS_WARN("my index is %i and msg.index is %i", this->index, msg.agent_index);
 	if(this->index == msg.agent_index){
+	//	ROS_WARN("returning");
 		return;
 	}
+	//ROS_WARN("still here");
 	//for(size_t i=0; i<msg.claimed_tasks.size(); i++){
-	//	ROS_INFO("Agent::coord_plan_callback: agent[%i], task: %i, time: %0.2f, and prob: %0.2f", msg.agent_index, msg.claimed_tasks[i], msg.claimed_time[i], msg.claimed_probability[i]);
+	//	ROS_INFO("Agent[%i]::coord_plan_callback: agent[%i], task: %i, time: %0.2f, and prob: %0.2f", this->index, msg.agent_index, msg.claimed_tasks[i], msg.claimed_time[i], msg.claimed_probability[i]);
 	//}
 	//ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->get_index(), msg.agent_index);
 	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
@@ -269,7 +271,6 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 	if(abs(odom_in.pose.pose.position.z - this->desired_alt) < 1.0){
 		double ts = sqrt(pow(odom_in.twist.twist.linear.x,2) + pow(odom_in.twist.twist.linear.y,2));
 		this->travel_vel = this->travel_vel + 0.001 * (ts - this->travel_vel);
-		this->travel_step = this->travel_vel * world->get_dt();
 		//ROS_INFO("travel_vel: %0.2f", this->travel_vel);
 		if(this->run_status == -1){
 			this->run_status = 0; // I have reached altitude

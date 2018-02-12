@@ -132,15 +132,14 @@ add_executable(dmcts
 	src/Agent.cpp
 	src/Agent_Coordinator.cpp
 	src/Agent_Planning.cpp
+	src/D_MCTS.cpp
 	src/DMCTS_node.cpp
 	src/Fuzzy_Bin.cpp
 	src/Goal.cpp
 	src/Pose.cpp
 	src/Map_Node.cpp
-	src/mcts.cpp
+	src/MCTS.cpp
 	src/Proability_Node.cpp
-	src/Sorted_List.cpp
-	src/TreeNode.cpp
 	src/World.cpp)
 
 target_link_libraries(dmcts ${catkin_LIBRARIES} ${OpenCV_LIBS})

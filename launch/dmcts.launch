@@ -3,6 +3,7 @@
   <arg name="num_nodes"/>
   <arg name="num_agents"/>
   <arg name="coord_method"/>
+  <arg name="not_simulation" default="true"/>
 	<node pkg="tf" type="static_transform_publisher" name="map_2_world_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
 
 	<node pkg="tf" type="static_transform_publisher" name="gps_2_world_broadcaster" args="0 0 0 0 0 0 1 world gps 100" />
@@ -17,6 +18,10 @@
     <param name="number_of_nodes" value="$(arg num_nodes)"/>
     <param name="number_of_agents" value="$(arg num_agents)"/>
     <param name="coord_method" type="str" value="$(arg coord_method)"/>
-    <include file="$(find my_quad_controller)/launch/pid_controller_0.launch"/>
+    <group if="$(arg not_simulation)">
+        <!-- stuff that will only be evaluated if foo is true -->
+        <include file="$(find my_quad_controller)/launch/pid_controller_0.launch"/>
+    </group>
+    
   </group>
 </launch>

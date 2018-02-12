@@ -6,7 +6,6 @@
 #include "Agent_Coordinator.h"
 #include "Agent_Planning.h"
 #include "Goal.h"
-#include "Sorted_List.h"
 #include "Pose.h"
 
 #include <random>
@@ -18,7 +17,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt ) {
+World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed ) {
 	//ROS_INFO("DMCTS::World::my_agent_index_in: %i", my_agent_index_in);
 	this->initialized = false;
 	this->show_display = display_plot;
@@ -34,6 +33,8 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->my_agent_index = my_agent_index_in;
 	this->n_agents = number_of_agents_in;
 	this->flat_tasks = true;
+	this->p_task_initially_active = p_initially_active; // how likely is it that a task is initially active, 3-0.25, 5-0.5, 7-0.75
+	this->pay_obstacle_cost = pay_obs;
 
 	// how often do I plot
 	this->plot_duration = ros::Duration(1); 
@@ -70,7 +71,6 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	
 	// task stuff
 	this->n_task_types = 4; // how many types of tasks are there
-	this->p_task_initially_active = 0.625; // how likely is it that a task is initially active, 3-0.25, 5-0.5, 7-0.75
 	this->p_impossible_task = 0.0; // how likely is it that an agent is created that cannot complete a task
 	this->p_activate_task = 0.0;// 1.0*this->dt; // how likely is it that I will activate a task each second? *dt accounts per iters per second
 	this->min_task_time = 1000.0; // shortest time to complete a task
@@ -84,9 +84,19 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->n_agent_types = 1; // how many types of agents
 	this->min_travel_vel = 2.3; // 5 - slowest travel speed
 	this->max_travel_vel = 2.7; // 25 - fastest travel speed
+	this->agent_cruising_speed = cruising_speed;
 	this->min_agent_work = 100.0; // min amount of work an agent does per second
 	this->max_agent_work = 100.0; // max amount of work an agent does per second
 
+	// agent starting locations
+	this->starting_locs.push_back(cv::Point2d(-25,-25));
+	this->starting_locs.push_back(cv::Point2d(25,25));
+	this->starting_locs.push_back(cv::Point2d(-25,25));
+	this->starting_locs.push_back(cv::Point2d(25,-25));
+	this->starting_locs.push_back(cv::Point2d(0,25));
+	this->starting_locs.push_back(cv::Point2d(25,0));
+	this->starting_locs.push_back(cv::Point2d(0,-25));
+	this->starting_locs.push_back(cv::Point2d(-25,0));
 
 	// reset randomization
 	srand(this->rand_seed);
@@ -114,6 +124,11 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 		this->task_selection_method = "mcts_task_by_completion_reward_impact";
 	}
 
+	if (this->task_selection_method == "mcts_task_by_completion_reward_gradient") {
+		this->impact_style = "gradient";
+		this->task_selection_method = "mcts_task_by_completion_reward_impact";
+	}
+
 	// reset randomization
 	srand(this->rand_seed);
 
@@ -126,16 +141,6 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 }
 
 void World::make_obs_mat(){
-	std::vector<cv::Point2d> starting_locs;
-	starting_locs.push_back(cv::Point2d(25,25));
-	starting_locs.push_back(cv::Point2d(75,75));
-	starting_locs.push_back(cv::Point2d(25,75));
-	starting_locs.push_back(cv::Point2d(75,25));
-	starting_locs.push_back(cv::Point2d(50,75));
-	starting_locs.push_back(cv::Point2d(75,50));
-	starting_locs.push_back(cv::Point2d(50,25));
-	starting_locs.push_back(cv::Point2d(25,50));
-
 	this->Obs_Mat = cv::Mat::zeros(this->map_width, this->map_height, CV_8UC1);
 	this->obstacles.clear();
 	ROS_INFO("DMCTS::World::make_obs_mat: making obstacles");
@@ -148,9 +153,9 @@ void World::make_obs_mat(){
 		//ROS_INFO("obs: %.1f, %.1f, r =  %.1f", xx, yy, rr);
 		// check if any starting locations are in an obstacle
 		bool flag = true;
-		for(size_t s=0; s<starting_locs.size(); s++){
-			double d = sqrt(pow(xx-starting_locs[s].x,2) + pow(yy-starting_locs[s].y,2));
-			//ROS_INFO("starting_locs: %.1f, %.1f, d = %.1f", starting_locs[s].x, starting_locs[s].y, d);
+		for(size_t s=0; s<this->starting_locs.size(); s++){
+			double d = sqrt(pow(xx-(this->starting_locs[s].x+this->map_width/2),2) + pow(yy-this->starting_locs[s].y+this->map_height/2,2));
+			//ROS_INFO("starting_locs: %.1f, %.1f, d = %.1f", this->starting_locs[s].x+this->map_width/2, this->starting_locs[s].y+this->map_height/2, d);
 			if(rr+2 >= d ){
 				// starting loc is in obstacle
 				flag = false;
@@ -161,7 +166,6 @@ void World::make_obs_mat(){
 		if(flag){
 			for(size_t s=0; s<this->obstacles.size(); s++){
 				double d = sqrt(pow(xx-this->obstacles[s][0],2) + pow(yy-this->obstacles[s][1],2));
-				//ROS_INFO("starting_locs: %.1f, %.1f, d = %.1f", starting_locs[s].x, starting_locs[s].y, d);
 				if(rr+1 >= d || this->obstacles[s][2]+1 >= d){
 					// obstacle is in obstacle
 					flag = false;
@@ -614,7 +618,7 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 	std::vector<cv::Scalar> agent_colors;
 	for (int i = 0; i < this->n_agent_types; i++) {
 		agent_travel_vels.push_back(2.0);
-		agent_obstacle_costs.push_back(true);
+		agent_obstacle_costs.push_back(this->pay_obstacle_cost);
 		agent_work_radii.push_back(2.0);
 		if(this->my_agent_index == i){
 			double r = 255.0;
@@ -625,9 +629,9 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 			agent_colors.push_back(color);	
 		}
 		else{
-			double r = 0.0;
-			double b = 0.0;
-			double g = 0.0;
+			double r = 127.0;
+			double b = 127.0;
+			double g = 127.0;
 
 			cv::Scalar color(b, g, r);
 			agent_colors.push_back(color);
@@ -640,7 +644,7 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 		if(i == this->my_agent_index){
 			actual_agent = true;
 		}
-		Agent* a = new Agent(nHandle, i, tp, agent_travel_vels[tp], agent_colors[tp], agent_obstacle_costs[tp], agent_work_radii[tp], actual_agent, this, this->desired_alt);
+		Agent* a = new Agent(nHandle, i, tp, this->agent_cruising_speed, agent_colors[tp], agent_obstacle_costs[tp], agent_work_radii[tp], actual_agent, this, this->desired_alt);
 		this->agents.push_back(a);
 		actual_agent = false;
 	}
@@ -819,7 +823,15 @@ void World::initialize_nodes_and_tasks() {
 	}
 
 	double x,y;
-	for (int i = 0; i < this->n_nodes; i++) {
+	for(size_t i=0; i<this->starting_locs.size(); i++){
+		int task_type = rand() % n_task_types;
+		Map_Node* n = new Map_Node(this->starting_locs[i].x, this->starting_locs[i].y, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
+		this->nodes.push_back(n);
+	}
+
+
+	int i = int(this->nodes.size());
+	while(i < this->n_nodes) {
 		bool flag = true;
 
 		while(flag){
@@ -832,7 +844,7 @@ void World::initialize_nodes_and_tasks() {
 		int task_type = rand() % n_task_types;
 		Map_Node* n = new Map_Node(x, y, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
 		this->nodes.push_back(n);
-		//std::cout << "( " << i << ": " << x << ", " << y << "), ";
+		i++;
 	}
 }
 

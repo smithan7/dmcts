@@ -1,8 +1,9 @@
-#include "mcts.h"
+#include "MCTS.h"
 #include "World.h"
 #include "Agent.h"
 #include "Map_Node.h"
 #include "Agent_Coordinator.h"
+#include "Pose.h"
 
 #include <iostream>
 #include "ros/ros.h"
@@ -59,7 +60,7 @@ MCTS::MCTS(World* world, Map_Node* task_in, Agent* agent_in, MCTS* parent, const
 	this->search_value = -1.0; // = explore_value + exploit_value
 	this->number_pulls = 0; // how many times have I been pulled
 	this->max_rollout_depth = 3; //edit these to ensure tree can grow on simple case
-	this->max_search_depth = 10; 
+	this->max_search_depth = 50; 
 
 	// sampling stuff
 	this->max_kid_index = -1; // index of gc
@@ -86,11 +87,12 @@ MCTS::MCTS(World* world, Map_Node* task_in, Agent* agent_in, MCTS* parent, const
 	//std::cerr << "d" << std::endl;
 
 	this->search_type = this->world->get_mcts_search_type();
-	this->beta = 20.0; //1.41; // ucb = 1.41, d-ucb = 1.41, sw-ucb = 0.705
-	this->epsilon = 0.5; // ucb = 0.5, d-ucb = 0.05, sw-ucb = 0.05
+	this->alpha = 0.05; // gradient descent rate, how fast should my team 
+	this->beta = 0.0705; // this is what I found in Matlab tests//20.0; //1.41; // ucb = 1.41, d-ucb = 1.41, sw-ucb = 0.705
+	this->epsilon = 0.05;//0.5; // ucb = 0.5, d-ucb = 0.05, sw-ucb = 0.05
 	this->gamma = 0.9; // ucb = n/a~1.0, d-ucb = 0.9, sw-ucb = 0.9
 	this->window_width = 5000; // how far back in my search history should I include searches
-	this->sampling_probability_threshold = 0.01; // how low of probability will I continue to sample and report
+	this->sampling_probability_threshold = 0.05; // how low of probability will I continue to sample and report
 
 	//std::cerr << "e" << std::endl;
 }
@@ -222,7 +224,7 @@ bool MCTS::kid_pruning_heuristic(const std::vector<bool> &task_status) {
 			if (travel_dist < this->max_kid_distance_threshold) {
 				//ROS_ERROR("MCTS::kid_pruning_heuristic: travel_dist < this->max_kid_distance_threshold");
 				this->get_expected_value();
-				if (this->distance < this->max_kid_distance_threshold) {
+				if (this->distance < this->max_kid_distance_threshold || true) {
 					//ROS_ERROR("MCTS::kid_pruning_heuristic: this->distance < this->max_kid_distance_threshold");
 					this->branch_value = this->expected_value; // only because kids don't exist yet!
 					return true;
@@ -268,24 +270,57 @@ void MCTS::sample_tree_and_advertise_task_probabilities(Agent_Coordinator* coord
 
 void MCTS::find_kid_probabilities() {
 
-	// none of these should be true, but just check
-	if (this->sum_kid_branch_value < 0.0) {
-		this->find_sum_kid_branch_value();
-	}
-	if (this->sum_kid_branch_value == 0) {
-		return;
-	}
-	if (this->max_kid_branch_value < 0.0) {
-		this->find_max_branch_value_kid();
-	}
-	if (this->min_kid_branch_value < 0.0) {
-		this->find_min_branch_value_kid();
-	}
-
 	// for all kids, assign their probability
-	for (size_t i = 0; i < this->kids.size(); i++) {
-		//TODO this->kids[i]->set_probability(this->sum_kid_branch_value, this->probability);
-		this->kids[i]->set_probability(this->sum_kid_branch_value, this->min_kid_branch_value, this->max_kid_branch_value, this->probability);
+	if(this->world->get_impact_style() != "gradient_descent"){
+		// none of these should be true, but just check
+		if (this->sum_kid_branch_value < 0.0) {
+			this->find_sum_kid_branch_value();
+		}
+		if (this->sum_kid_branch_value == 0) {
+			return;
+		}
+		if (this->max_kid_branch_value < 0.0) {
+			this->find_max_branch_value_kid();
+		}
+		if (this->min_kid_branch_value < 0.0) {
+			this->find_min_branch_value_kid();
+		}
+		for (size_t i = 0; i < this->kids.size(); i++) {
+			//TODO this->kids[i]->set_probability(this->sum_kid_branch_value, this->probability);
+			this->kids[i]->set_probability(this->sum_kid_branch_value, this->min_kid_branch_value, this->max_kid_branch_value, this->probability);
+		}
+	}
+	else{
+		// Use Gradient descent to get kid probabilities
+
+		// Get max kid
+		int maxK = -1;
+		double maxV = -INFINITY;
+		for (size_t i = 0; i < this->kids.size(); i++) {
+			if(this->kids[i]->get_branch_value() > maxV){
+				maxV = this->kids[i]->get_branch_value();
+				maxK = i;
+			}
+		}
+		double pSum = 0.0;
+		// Adjust probabilities
+		for (size_t i=0; i<this->kids.size(); i++){
+			if (int(i) == maxK){
+				// I am the best kid, increase my probability
+				double p = this->kids[i]->get_probability() + this->kids[i]->get_alpha() * (1.0 - this->kids[i]->get_probability());
+				this->kids[i]->set_probability(p);
+			}
+			else{
+				// I am not the best kid, decrease my probability
+				double p = this->kids[i]->get_probability() + this->kids[i]->get_alpha() * (0.0 - this->kids[i]->get_probability());
+				this->kids[i]->set_probability(p);
+			}
+			pSum += this->kids[i]->get_probability();
+		}
+		// Normalize Probabilities
+		for(size_t i=0; i<this->kids.size(); i++){
+			this->kids[i]->set_probability( this->kids[i]->get_probability() / pSum );
+		}
 	}
 }
 
@@ -300,7 +335,7 @@ void MCTS::set_probability(const double &sum, const double &min, const double &m
 	}
 
 	if (this->world->get_impact_style() == "optimal") {
-		this->probability = parent_probability * ov + (1- parent_probability) *wv;
+		this->probability = parent_probability * ov + (1-parent_probability)*wv;
 	}
 	else if (this->world->get_impact_style() == "fixed") {
 		this->probability = 0.5 * ov + (1 - 0.5) *wv;
@@ -364,7 +399,6 @@ void MCTS::rollout(const int &c_index, const int &rollout_depth, const double &t
 		passed_branch_value += max_comp_reward; // add this iteration's reward
 
 		// search below
-		//TODO::remove and add back in the element in task set
 		task_status[max_index] = false; // set task I am about to rollout as complete
 		rollout(max_index, rollout_depth + 1, max_comp_time, task_status, task_set, passed_branch_value); // rollout selected task
 		task_status[max_index] = true; // reset task I just rolledout
@@ -618,6 +652,171 @@ void MCTS::reset_mcts_team_prob_actions(){
 	}	
 }
 
+void MCTS::new_search_from_root(std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter) {
+	//ROS_ERROR("MCTS::search_from_root: in");
+	//make sure work time is set
+	if (this->work_time < 0.0) {
+		this->work_time = this->task->get_time_to_complete(this->agent, this->world);
+	}
+
+	// should I reset probabilities?
+	if (this->last_planning_iter_end < last_planning_iter_end) {
+		this->last_planning_iter_end = last_planning_iter_end;
+		this->update_kid_values_with_new_probabilities();
+	}
+
+	// make sure completion and travel time are correct
+	double path_cost = 0.0;
+	double current_edge_cost = 0.0;
+
+	if (this->world->get_edge_cost(this->agent->get_edge().x, this->agent->get_edge().y, this->agent->get_pay_obstacle_cost(), current_edge_cost)) {
+		if (this->world->get_travel_cost(this->agent->get_edge().y, this->task_index, this->agent->get_pay_obstacle_cost(), path_cost)) {
+			this->distance = path_cost + (1 - this->agent->get_edge_progress()) * current_edge_cost;
+			this->travel_time = this->distance / this->agent->get_travel_vel();
+			this->completion_time = this->world->get_c_time() + this->work_time + this->travel_time;
+			this->last_update_time = -INFINITY; // make sure I update the root every time
+			//this->get_expected_value();
+		}
+		else {
+			ROS_ERROR("MCTS::search from root::failed to find edge_cost");
+			return;
+		}
+	}
+	else {
+		ROS_ERROR("MCTS::search from root::failed to find travel_cost");
+		return;
+	}
+
+	// I will be searched, count it!
+	this->number_pulls++;
+
+	if (this->kids.size() > 0) {
+	//	ROS_ERROR("MCTS::search_from_root: already have kids");
+		// if I have kids, then select kid with best search value, and search them
+		// erase kids who are no longer active
+		erase_null_kids();
+		
+		MCTS* gc = NULL;
+		if (this->find_kid_to_search(task_status, gc, planning_iter)) {
+			//ROS_ERROR("MCTS::search_from_root: found %i kids to search", int(this->kids.size()));
+			//for(size_t i=0; i<this->kids.size(); i++){
+			//	ROS_ERROR("	MCTS::search_from_root: kids[%i]: %i", i, this->kids[i]->get_task_index());
+			//}
+			// initialize kid's branch reward
+			double kids_branch_value = 0;
+			double kids_prior_branch_value = gc->get_branch_value();
+
+			// search the kid's branch 
+			task_status[gc->get_task_index()] = false; // simulate completing the task
+			gc->search(1, kids_branch_value, this->completion_time, task_status, task_set, last_planning_iter_end, planning_iter);
+			task_status[gc->get_task_index()] = true; // mark the task incomplete, undo simulation
+
+			if (this->search_type == "SW-UCT") {
+				gc->add_sw_uct_update(this->min_kid_branch_value, this->max_kid_branch_value, planning_iter);
+			}
+
+			// do something with the reward
+			this->update_branch_values(gc, kids_prior_branch_value);
+		}
+	}
+	else {
+		//ROS_WARN("MCTS::search_from_root: don't have kids, need  to make some");
+		//ROS_WARN("    MCTS::search_from_root: task_status.size(): %i", int(task_status.size()));
+		//ROS_WARN("    MCTS::search_from_root: task_set.size(): %i", int(task_set.size()));		
+		// I don't have kids, make kids and rollout best kid
+		if (this->make_kids(task_status, task_set)) {
+			MCTS* gc = this->kids[this->max_kid_index];
+			task_status[gc->get_task_index()] = false;
+			gc->rollout(gc->get_task_index(), 0, gc->completion_time, task_status, task_set, gc->rollout_reward);
+			task_status[gc->get_task_index()] = true;
+			//ROS_ERROR("MCTS::search_from_root: made kids");
+		}
+		else{
+			//ROS_WARN("MCTS::search_from_root: could not make kids");
+		}
+	}
+
+	this->find_min_branch_value_kid();
+	this->find_max_branch_value_kid();
+}
+
+
+void MCTS::new_search(const int &depth_in, double &passed_branch_value, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter) {
+	
+	//ROS_INFO("MCTS::Search: Searching: %i", this->task_index);
+	if (task_status[this->task_index] == true) {
+		ROS_ERROR("MCTS::search: bad task selected");
+	}
+
+	if (depth_in > this->max_search_depth || time_in > this->world->get_end_time()) {
+		//ROS_ERROR("MCTS::search: returning");
+		//ROS_ERROR("MCTS::search: depth in > this->max_search_depth: %i > %i", depth_in, this->max_search_depth);
+		//ROS_ERROR("MCTS::search: time_in > this->world->get_end_time(): %0.2f > %0.2f", time_in, this->world->get_end_time());
+		// if I am past the max search depth i have 0 search reward and should return without adding to passed branch value
+		return;
+	}
+	
+	// should I reset probabilities?
+	if (this->last_planning_iter_end < last_planning_iter_end) {
+		this->last_planning_iter_end = last_planning_iter_end;
+		this->update_kid_values_with_new_probabilities();
+	}
+	// I will be searched, count it!
+	this->number_pulls++;
+	this->explore_value = -1.0; // reset explore value so it is recomputed next iter, this is implemented in get_explore_value()
+
+	if ( abs(time_in - this->parent_time) > 0.2) {
+		this->parent_time = time_in;
+		this->distance = -1;
+		this->get_expected_value();
+	}
+
+	if (this->kids.size() > 0) {
+
+		// get kis who no longer have active tasks
+		this->erase_null_kids();
+
+		// if I have kids, then select kid with best search value, and search them
+		MCTS* gc = NULL;
+		if (this->find_kid_to_search(task_status, gc, planning_iter)) {
+			//ROS_ERROR("MCTS::search: found %i kids to search at depth %i", int(this->kids.size()), depth_in);
+			//for(size_t i=0; i<this->kids.size(); i++){
+			//	ROS_ERROR("	MCTS::search: kids[%i]: %i", i, this->kids[i]->get_task_index());
+			//}
+			// initialize kid's branch reward
+			double kids_branch_value = 0;
+			double kids_prior_branch_value = gc->get_branch_value();
+
+			// search the kid's branch 
+			task_status[gc->get_task_index()] = false; // simulate completing the task
+			gc->search(depth_in + 1, kids_branch_value, this->completion_time, task_status, task_set, last_planning_iter_end, planning_iter);
+			task_status[gc->get_task_index()] = true; // mark the task incomplete, undo simulation
+
+			// update uct sutff
+			if (this->search_type == "SW-UCT") {
+				gc->add_sw_uct_update(this->min_kid_branch_value, this->max_kid_branch_value, planning_iter);
+			}
+
+			// do something with the reward
+			this->update_branch_values(gc, kids_prior_branch_value);
+			passed_branch_value = this->branch_value;
+		}
+	}
+	else {
+		// I don't have kids, make kids and rollout best kid
+		if (this->make_kids(task_status, task_set)) {
+			MCTS* gc = this->kids[this->max_kid_index];
+			task_status[gc->get_task_index()] = false;
+			gc->rollout(gc->get_task_index(), 0, gc->completion_time, task_status, task_set, gc->rollout_reward);
+			task_status[gc->get_task_index()] = true;
+		}
+	}
+
+	this->find_min_branch_value_kid();
+	this->find_max_branch_value_kid();
+	passed_branch_value = this->branch_value;
+}
+
 void MCTS::search_from_root(std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter) {
 	//ROS_ERROR("MCTS::search_from_root: in");
 	//make sure work time is set
@@ -634,11 +833,13 @@ void MCTS::search_from_root(std::vector<bool> &task_status, std::vector<int> &ta
 	// make sure completion and travel time are correct
 	double path_cost = 0.0;
 	double current_edge_cost = 0.0;
+
 	if (this->world->get_edge_cost(this->agent->get_edge().x, this->agent->get_edge().y, this->agent->get_pay_obstacle_cost(), current_edge_cost)) {
 		if (this->world->get_travel_cost(this->agent->get_edge().y, this->task_index, this->agent->get_pay_obstacle_cost(), path_cost)) {
 			this->distance = path_cost + (1 - this->agent->get_edge_progress()) * current_edge_cost;
 			this->travel_time = this->distance / this->agent->get_travel_vel();
 			this->completion_time = this->world->get_c_time() + this->work_time + this->travel_time;
+			this->last_update_time = -INFINITY; // make sure I update the root every time
 			//this->get_expected_value();
 		}
 		else {

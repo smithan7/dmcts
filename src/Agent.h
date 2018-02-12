@@ -75,7 +75,6 @@ public:
 	
 	int get_type() { return this->type; };
 	double get_travel_vel() { return this->travel_vel; };
-	double get_travel_step() { return this->travel_step; };
 	bool get_pay_obstacle_cost() { return this->pay_obstacle_cost; };
 
 	bool get_at_node() { return this->at_node(); };
@@ -122,7 +121,6 @@ private:
 	int index; // who am I in the world?
 	int type; // what type of agent am I?
 	double travel_vel; // how fast can I move?
-	double travel_step; // how far do I move in one time step
 	bool pay_obstacle_cost; // do obstacles affect me?
 	cv::Scalar color; // what color am I plotted?
 	int n_tasks; // how many tasks are there

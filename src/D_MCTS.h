@@ -8,13 +8,14 @@ class Agent;
 class Agent_Coordinator;
 class World;
 
-class MCTS
+class D_MCTS
 {
 public:
-	MCTS(World* world, Map_Node* task_in, Agent* agent_in, MCTS* parent, const int &my_kid_index, const double &parent_time_in);
-	~MCTS();
+	D_MCTS(World* world, Map_Node* task_in, Agent* agent_in, D_MCTS* parent, const int &my_kid_index, const double &parent_time_in);
+	~D_MCTS();
 
 	Agent* get_agent() { return this->agent; };
+	double get_alpha() { return this->alpha; };
 	double get_branch_value(); // might have to calc a few things, not a simple return
 	double get_distance() {return this->distance; };
 	double get_expected_value(); // might have to calc some things, not a simple return
@@ -32,9 +33,11 @@ public:
 
 	// call from parent not self
 	void search_from_root(std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter);
-	void search(const int &depth_in, double &passed_reward, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter);
+	void search(const int &depth_in, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter);
+	
 	bool kid_pruning_heuristic(const std::vector<bool> &task_status);
 	void reset_task_availability_probability() { this->probability_task_available = -1.0; };
+	void set_probability(const double &prob){ this->probability = prob; };
 	void set_probability(const double &sum_value, const double &parent_probability);
 	void set_probability(const double &sum, const double &min_value, const double &max_value, const double &parent_probability);
 	void set_as_root();
@@ -42,34 +45,33 @@ public:
 	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals);
 	void prune_branches(); // if I just moved on to the next branch then I should prune old branches
 	void burn_branches(); // don't save any kids, burn it all
-	MCTS* get_golden_child(); // get pointer to golden child, mainly for moving to next branch
+	D_MCTS* get_golden_child(); // get pointer to golden child, mainly for moving to next branch
 	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards);
 
 private:
 	// rollout does not create new nodes
 	void rollout(const int &c_index, const int &rollout_depth, const double&time_in, std::vector<bool> &task_status, std::vector<int> &task_set, double &passed_value);
 	bool make_kids(std::vector<bool> &task_status, std::vector<int> &task_set);
-	bool make_nbr_kids(const std::vector<bool> &task_status);
-	void keep_n_best_kids(MCTS* kiddo);
 	void find_max_branch_value_kid(); // find the maximum expected value kid
 	void find_min_branch_value_kid(); // find the minimum expected value kid 
 	void find_sum_kid_branch_value(); // find the sum of all of my kids branch values
-	void update_max_branch_value_kid(MCTS* gc); // check if I need to update max kid and update it and my branch value if I have to
-	void update_min_branch_value_kid(MCTS* gc); // check if I need to update max kid and update if I have to
+	void update_max_branch_value_kid(D_MCTS* gc); // check if I need to update max kid and update it and my branch value if I have to
+	void update_min_branch_value_kid(D_MCTS* gc); // check if I need to update max kid and update if I have to
 	void update_kid_values_with_new_probabilities();
-	void update_branch_values(MCTS* gc, const double &kids_prior_branch_value); // update my branch value, min, max, and sum
+	void update_branch_value(); // update my branch value, min, max, and sum
 	void erase_null_kids();
 
-	bool find_kid_to_search(const std::vector<bool> &task_status, MCTS* &gc, const int &search_iter);
+	bool ucb_select_kid(D_MCTS* &gc);
 	void find_kid_probabilities(); // find and assign my kid probabilities
 
 	Agent* agent;
 	Map_Node* task;
 	int task_index;
 	World* world;
-	MCTS* parent;
+	D_MCTS* parent;
 	double last_update_time;
 	
+	double alpha; // gradient descent value
 	int max_rollout_depth, max_search_depth;
 	double rollout_reward;
 	double max_kid_distance_threshold; // how far can a node be and still be a child
@@ -106,7 +108,7 @@ private:
 
 	double number_pulls; // how many times have I been pulled
 	double beta, epsilon, gamma; // for ucb, d-ducb, sw-ucb
-	std::vector<MCTS*> kids; // my kids
+	std::vector<D_MCTS*> kids; // my kids
 };
 
 

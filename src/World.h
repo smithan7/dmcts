@@ -14,7 +14,7 @@ class Task;
 class World
 {
 public:
-	World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &num_agents_in, const double &des_alt);
+	World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &num_agents_in, const double &des_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed);
 	// doing everything
 	//void iterate_all();
 	double get_team_probability_at_time_except(const double & time, const int & task, const int & except_agent);
@@ -76,6 +76,8 @@ private:
 	std::vector<double> max_task_rewards, min_task_rewards;
 	std::vector<double> max_task_times, min_task_times;
 	std::vector<double> max_task_works, min_task_works;
+	std::vector<cv::Point2d> starting_locs;
+	
 
 	int my_agent_index;
 	double c_time, dt, end_time;
@@ -89,8 +91,10 @@ private:
 	double p_task_initially_active, p_impossible_task, p_activate_task;
 	double min_task_time, max_task_time, min_task_work, max_task_work, min_task_reward, max_task_reward;
 	double min_travel_vel, max_travel_vel, min_agent_work, max_agent_work;
+	double agent_cruising_speed;
 	double map_width, map_height;
 	double p_pay_obstacle_cost; // probability that a generated agent will have to pay obstacle tolls
+	bool pay_obstacle_cost;
 	double desired_alt; // what altitude does my agent operate at
 
 	int k_map_connections; // minimum number of connections in graph
