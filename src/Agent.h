@@ -6,8 +6,14 @@
 #include <ros/ros.h>
 #include "geometry_msgs/Twist.h"
 #include "nav_msgs/Odometry.h"
-#include "custom_messages/DMCTS_Probability.h"
+#include "custom_messages/DMCTS_Travel_Goal.h"
+#include "custom_messages/DMCTS_Coordination.h"
+#include "custom_messages/DMCTS_Request_Task_List.h"
+#include "custom_messages/DMCTS_Task_List.h"
+#include "custom_messages/DMCTS_Request_Work.h"
+#include "custom_messages/DMCTS_Work_Status.h"
 #include "custom_messages/DMCTS_Pulse.h"
+#include "custom_messages/DMCTS_Loc.h"
 #include "rosgraph_msgs/Clock.h"
 
 #include <vector>
@@ -28,25 +34,46 @@ class Agent
 {
 public:
 	// ros stuff
-	ros::Timer plan_timer, act_timer, send_loc_timer, task_list_timer;
-	ros::Publisher move_pub, coord_pub;
-	ros::Subscriber odom_sub, coord_sub, pulse_sub; //clock_sub;
-	ros::ServiceClient task_list_client, work_client, send_loc_client, a_star_path_client, kinematic_client;
-	ros::Duration act_duration, plan_duration, send_loc_duration, task_list_duration;
+	ros::Timer plan_timer, act_timer, send_loc_timer, task_list_timer, work_timer;
+	ros::Publisher move_pub, coord_pub, loc_pub, request_work_pub, request_task_list_pub;
+	ros::Subscriber odom_sub, coord_sub, pulse_sub, work_status_sub, task_list_sub;
+
+
+	ros::Duration act_duration, plan_duration;
+	ros::Duration send_loc_duration, pulse_duration; // How often do I send my location and how often should I hear from the ground station
+	ros::Duration task_list_timer_duration, task_list_wait_duration; // How often do I check if my task list request was answered and how long until I send another one
+	ros::Duration  work_request_timer_duration, work_wait_duration; // How often do I check if my work request was answered and how long until I send another one
+	ros::Time last_pulse_time, work_request_sent_time, task_list_request_sent_time;
+	
+	// My planning and action callbacks
 	void plan_timer_callback(const ros::TimerEvent &e); // use planning method
 	void act_timer_callback(const ros::TimerEvent &e); // move / work
+	
+	// Publish to Quad
 	void publish_to_control_script(const int &goal_node ); // publish command vel to python node
+	
+	// Publish to XBee
 	void publish_work_request(const int &goal_node ); // tell master node where I am and try to work
-	void publish_coord_plan();
-	void coord_plan_callback(const custom_messages::DMCTS_Probability &msg);
-	void odom_callback(const nav_msgs::Odometry &locIn); // get my current location from gazebo
-	void pulse_callback(const custom_messages::DMCTS_Pulse &msg);
-	//void clock_callback(const rosgraph_msgs::Clock &tmIn);
-	void send_request_for_task_list(); // get task list from master node, has all active tasks
-	void send_loc_service_timer_callback(const ros::TimerEvent &e); // send the location to the master node
+	void work_timer_callback(const ros::TimerEvent &e);
 	void task_list_timer_callback(const ros::TimerEvent &e);
-	void upload_new_plan(const std::vector<int> &claimed_tasks, const std::vector<double> &claimed_time, const std::vector<double> &claimed_probability);
+	void publish_task_list_request();
+	void publish_loc_timer_callback(const ros::TimerEvent &e); // send the location to the master node
+	void publish_coordination(); // publish the coordination script
 
+	// From Quad Subs
+	void odom_callback(const nav_msgs::Odometry &locIn); // get my current location from gazebo
+
+	// From XBee Subs
+	void coordination_callback(const custom_messages::DMCTS_Coordination &msg);
+	void pulse_callback(const custom_messages::DMCTS_Pulse &msg);
+	void task_list_callback(const custom_messages::DMCTS_Task_List &msg);
+	void work_status_callback(const custom_messages::DMCTS_Work_Status &msg);
+	
+
+	// Used for com vars
+	bool waiting_on_work_status, waiting_on_task_list;
+
+	void upload_new_plan(const std::vector<int> &claimed_tasks, const std::vector<double> &claimed_time, const std::vector<double> &claimed_probability);
 	double map_offset_x, map_offset_y;
 
 	// functions
@@ -131,6 +158,7 @@ private:
 	
 	// working and planning
 	void work_on_task(); // work on the task I am at
+	void request_task_list();
 	int run_status;
 	
 	// moving and path planning 

@@ -524,6 +524,7 @@ void MCTS::add_sw_uct_update(const double &min, const double &max, const int &pl
 double MCTS::get_expected_value() {
 	// already know task is incomplete, this is only the value for completing me!
 	// DOES NOT INCLUDE KIDS! NOT BRANCH VALUE!
+	bool need_path = false;
 
 	if (this->work_time < 0.0) {
 		this->work_time = this->task->get_time_to_complete(this->agent, this->world);
@@ -535,7 +536,7 @@ double MCTS::get_expected_value() {
 		// need to set everything, then return value
 		double dist = 0.0;
 		std::vector<int> path;
-		if (this->world->a_star(this->task_index, this->parent->get_task_index(), this->agent->get_pay_obstacle_cost(), path, dist)) {
+		if (this->world->a_star(this->task_index, this->parent->get_task_index(), this->agent->get_pay_obstacle_cost(), need_path, path, dist)) {
 			this->distance = dist;
 			this->travel_time = this->distance / this->agent->get_travel_vel();
 			this->completion_time = this->parent_time + this->travel_time + this->work_time;

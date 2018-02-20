@@ -16,51 +16,39 @@ public:
 
 	Agent* get_agent() { return this->agent; };
 	double get_alpha() { return this->alpha; };
-	double get_branch_value(); // might have to calc a few things, not a simple return
+	double get_branch_reward(); // might have to calc a few things, not a simple return
 	double get_distance() {return this->distance; };
-	double get_expected_value(); // might have to calc some things, not a simple return
-	double get_search_value(const double &min, const double &max, const int &pull_iter); // might have to calc values, not a simple return
-	int get_kid_index() { return this->kid_index; }
-	double get_max_kid_distance_threshold() { return this->max_kid_distance_threshold; };
+	double get_expected_reward(); // might have to calc some things, not a simple return
 	double get_n_pulls() { return this->number_pulls; };
 	double get_probability() { return this->probability; };
 	double get_reward() { return this->reward; };
+	std::vector<D_MCTS*> get_kids() {return this->kids; }; // get access to kids
 	Map_Node* get_task() { return this->task; };
 	int get_task_index() { return this->task_index; };
 	double get_completion_time() { return this->completion_time; };
 	void set_task_index(const int &ti);
 	void reset_mcts_team_prob_actions();
+	void set_as_root() {this->probability = 1.0; };
 
 	// call from parent not self
-	void search_from_root(std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter);
-	void search(const int &depth_in, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, const int &last_planning_iter_end, const int &planning_iter);
-	
-	bool kid_pruning_heuristic(const std::vector<bool> &task_status);
+	void search_from_root(std::vector<bool> &task_status, std::vector<int> &task_set);
+	void search(const int &depth_in, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, int &rollout_depth);
 	void reset_task_availability_probability() { this->probability_task_available = -1.0; };
 	void set_probability(const double &prob){ this->probability = prob; };
-	void set_probability(const double &sum_value, const double &parent_probability);
-	void set_probability(const double &sum, const double &min_value, const double &max_value, const double &parent_probability);
-	void set_as_root();
+	void update_probable_actions();
 	void sample_tree_and_advertise_task_probabilities(Agent_Coordinator* coord_in); // get my probabilities to advertise
 	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals);
-	void prune_branches(); // if I just moved on to the next branch then I should prune old branches
+	void prune_branches(const int &max_child);
 	void burn_branches(); // don't save any kids, burn it all
-	D_MCTS* get_golden_child(); // get pointer to golden child, mainly for moving to next branch
 	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards);
 
 private:
 	// rollout does not create new nodes
-	void rollout(const int &c_index, const int &rollout_depth, const double&time_in, std::vector<bool> &task_status, std::vector<int> &task_set, double &passed_value);
 	bool make_kids(std::vector<bool> &task_status, std::vector<int> &task_set);
-	void find_max_branch_value_kid(); // find the maximum expected value kid
-	void find_min_branch_value_kid(); // find the minimum expected value kid 
-	void find_sum_kid_branch_value(); // find the sum of all of my kids branch values
-	void update_max_branch_value_kid(D_MCTS* gc); // check if I need to update max kid and update it and my branch value if I have to
-	void update_min_branch_value_kid(D_MCTS* gc); // check if I need to update max kid and update if I have to
-	void update_kid_values_with_new_probabilities();
-	void update_branch_value(); // update my branch value, min, max, and sum
-	void erase_null_kids();
-
+	void update_max_branch_reward_kid(D_MCTS* gc); // check if I need to update max kid and update it and my branch reward if I have to
+	void update_min_branch_reward_kid(D_MCTS* gc); // check if I need to update max kid and update if I have to
+	void update_kid_rewards_with_new_probabilities();
+	void update_branch_reward(); // update my branch reward, min, max, and sum
 	bool ucb_select_kid(D_MCTS* &gc);
 	void find_kid_probabilities(); // find and assign my kid probabilities
 
@@ -71,10 +59,8 @@ private:
 	D_MCTS* parent;
 	double last_update_time;
 	
-	double alpha; // gradient descent value
+	double alpha; // gradient descent reward
 	int max_rollout_depth, max_search_depth;
-	double rollout_reward;
-	double max_kid_distance_threshold; // how far can a node be and still be a child
 	double probability_task_available;
 	double distance; // how far from parent am I by astar?
 	double travel_time; // time by astar path?
@@ -82,26 +68,22 @@ private:
 	double completion_time; // time I actually finish and am ready to leave
 	double parent_time; // when should I calc travel time from
 	double reward; // my reward at e_time/time?
-	double expected_value; // my expected value for completing task at e_time/time with e_dist/dist?
-	double reward_weighting, distance_weighting; // for value function
-	double branch_value; // my and all my best kids expected value combined
-	double exploit_value; // weighted expected value
-	double explore_value; // value of searching rare arms
-	double search_value; // exploit value + explore value
+	double expected_reward; // my expected reward for completing task at e_time/time with e_dist/dist?
+	double reward_weighting, distance_weighting; // for reward function
+	double branch_reward; // my and all my best kids expected reward combined
 	int last_planning_iter_end; // what was the end of the last iter called, to know if i need to resample the probabilities
 	double wait_time; // how long do I wait if I select a null action
 
 	std::string search_type;
 	std::vector<int> time_log; // record keeping
-	std::vector<double> exp_value_log; // record keeping
-	double sum_exp_value, sum_n_pulls;
+	std::vector<double> exp_reward_log; // record keeping
+	double sum_exp_reward, sum_n_pulls;
 	int window_width;
 
-	int kid_index; // my index in my parents kids
-	int max_kid_index, min_kid_index; // current golden child
-	double max_kid_branch_value, min_kid_branch_value, sum_kid_branch_value; // their value, for normalizing
+	int max_kid_index; // current golden child
+	double max_kid_branch_reward; // their reward, for normalizing
 
-	double probability; // probability of me being selected, function of my relative value to adjacent kids and parent's probability
+	double probability; // probability of me being selected, function of my relative reward to adjacent kids and parent's probability
 	double sampling_probability_threshold; // when probability drops below this, stop searching
 
 	void add_sw_uct_update(const double &min, const double &max, const int &planning_iter);

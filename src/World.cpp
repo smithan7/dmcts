@@ -19,6 +19,7 @@
 
 World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed ) {
 	//ROS_INFO("DMCTS::World::my_agent_index_in: %i", my_agent_index_in);
+	//std::cerr << "World::World::this->task_selection_method: " << task_selection_method << std::endl;
 	this->initialized = false;
 	this->show_display = display_plot;
 	this->score_run = score_run;
@@ -126,7 +127,7 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 
 	if (this->task_selection_method == "mcts_task_by_completion_reward_gradient") {
 		this->impact_style = "gradient";
-		this->task_selection_method = "mcts_task_by_completion_reward_impact";
+		this->task_selection_method = "mcts_task_by_completion_reward_gradient";
 	}
 
 	// reset randomization
@@ -367,7 +368,8 @@ bool World::valid_agent(const int a) {
 bool World::get_travel_cost(const int &s, const int &g, const bool &pay_obstacle_cost, double &cost) {
 	if (this->valid_node(s) && this->valid_node(g)) {
 		std::vector<int> path;
-		if (this->a_star(s, g, pay_obstacle_cost, path, cost)) {
+		bool need_path = false;
+		if (this->a_star(s, g, pay_obstacle_cost, need_path, path, cost)) {
 			return true;
 		}
 		else {
@@ -383,7 +385,8 @@ bool World::get_travel_time(const int &s, const int &g, const double &step_dist,
 	if (this->valid_node(s) && this->valid_node(g)) {
 		double dist;
 		std::vector<int> path;
-		if (this->a_star(s, g, pay_obstacle_cost, path, dist)) {
+		bool need_path = false;
+		if (this->a_star(s, g, pay_obstacle_cost, need_path, path, dist)) {
 			time = dist / step_dist;
 			return true;
 		}
@@ -404,6 +407,10 @@ bool World::valid_node(const int &n) {
 	else {
 		return false;
 	}
+}
+
+bool World::get_task_status(const int &task_index){
+	return this->nodes[task_index]->is_active(); 
 }
 
 void World::iterate_my_agent() {
@@ -651,6 +658,11 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 }
 
 void World::initialize_PRM() {
+	// get travel distance between all nodes
+	this->travel_distances = cv::Mat(this->n_nodes, this->n_nodes, CV_32F, -1);
+	this->obstacle_distances = cv::Mat(this->n_nodes, this->n_nodes, CV_32F, -1);
+
+
 	// connect all nodes within radius
 	this->task_status_list.clear();
 	for (int i = 0; i < this->n_nodes; i++) {
@@ -673,6 +685,10 @@ void World::initialize_PRM() {
 					// set normal nbr and travel
 					this->nodes[i]->add_nbr(j, d, obs_cost);
 					this->nodes[j]->add_nbr(i, d, obs_cost);
+					this->travel_distances.at<float>(i,j) = d;
+					this->obstacle_distances.at<float>(i,j) = obs_cost;
+					this->travel_distances.at<float>(j,i) = d;
+					this->obstacle_distances.at<float>(j,i) = obs_cost;
 				}
 			}
 		}
@@ -730,9 +746,58 @@ void World::initialize_PRM() {
 			double obs_cost = min_dist*(1+mean_val);
 			this->nodes[i]->add_nbr(mindex, min_dist, obs_cost);
 			this->nodes[mindex]->add_nbr(i, min_dist, obs_cost);
+			this->travel_distances.at<float>(i,mindex) = min_dist;
+			this->obstacle_distances.at<float>(i,mindex) = obs_cost;
+			this->travel_distances.at<float>(mindex,i) = min_dist;
+			this->obstacle_distances.at<float>(mindex,i) = obs_cost;
 			//ROS_INFO("%i -> %i: %0.1f", i, mindex, min_dist);
 		}
 	}
+
+	/*
+	ROS_ERROR("travel_distances");
+	for(int i=0; i<this->n_nodes; i++){
+		for(int j=0; j<this->n_nodes; j++){
+			std::cout << this->obstacle_distances.at<float>(i,j) << ",";
+		}
+		std::cout << std::endl;
+	}
+	*/
+
+	for(int i=0; i<this->n_nodes; i++){
+		for(int j=i; j<this->n_nodes; j++){
+			if(this->travel_distances.at<float>(i,j) == -1){
+				double d = 0.0;
+				std::vector<int> path;
+				if(a_star(i, j, false, false, path, d)){
+					this->travel_distances.at<float>(i,j) = float(d);
+					this->travel_distances.at<float>(j,i) = float(d);
+				}
+				else{
+					this->travel_distances.at<float>(i,j) = INFINITY;
+					this->travel_distances.at<float>(j,i) = INFINITY;
+				}
+				if(a_star(i, j, true, false, path, d)){
+					this->obstacle_distances.at<float>(i,j) = float(d);
+					this->obstacle_distances.at<float>(j,i) = float(d);
+				}
+				else{
+					this->obstacle_distances.at<float>(i,j) = INFINITY;
+					this->obstacle_distances.at<float>(j,i) = INFINITY;
+				}
+			}
+		}
+	}
+
+	/*
+	ROS_ERROR("travel_distances prime");
+	for(int i=0; i<this->n_nodes; i++){
+		for(int j=0; j<this->n_nodes; j++){
+			std::cout << this->obstacle_distances.at<float>(i,j) << ",";
+		}
+		std::cout << std::endl;
+	}
+	*/
 }
 
 double World::rand_double_in_range(const double &min, const double &max) {
@@ -746,6 +811,7 @@ double World::dist2d(const double &x1, const double &x2, const double &y1, const
 }
 
 bool World::get_edge_cost(const int &n1, const int &n2, const bool &pay_obstacle_cost, double &cost) {
+	//std::cerr << "World::get_edge_cost: with edge: " << n1 << " -> " << n2 << std::endl;
 	if (n1 >= 0 && n1 < this->n_nodes) {
 		if (n1 == n2) {
 			cost = 0.0;
@@ -860,7 +926,7 @@ World::~World(){
 	this->agents.clear();
 }
 
-bool World::a_star(const int &start, const int &goal, const bool &pay_obstacle_cost, std::vector<int> &path, double &length) {
+bool World::a_star(const int &start, const int &goal, const bool &pay_obstacle_cost, const bool &need_path, std::vector<int> &path, double &length) {
 
 	if (start < 0 || start >= this->n_nodes) {
 		ROS_ERROR("World::a_star:: start off graph");
@@ -869,6 +935,18 @@ bool World::a_star(const int &start, const int &goal, const bool &pay_obstacle_c
 	if (goal < 0 || goal >= this->n_nodes) {
 		ROS_ERROR("World::a_star:: goal off graph");
 		return false;
+	}
+
+	if (!need_path){
+		// Don't need path, check the obstacle and travel distance mats
+		if(pay_obstacle_cost && this->obstacle_distances.at<float>(start,goal) > 0){
+			length = this->obstacle_distances.at<float>(start,goal);
+			return true;
+		}
+		if(!pay_obstacle_cost && this->travel_distances.at<float>(start,goal) > 0){
+			length = this->travel_distances.at<float>(start,goal);
+			return true;
+		}
 	}
 
 	// garbage variables

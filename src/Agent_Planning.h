@@ -7,6 +7,7 @@ class World;
 class Probability_Node;
 class Agent;
 class MCTS;
+class D_MCTS;
 
 class Agent_Planning
 {
@@ -22,6 +23,7 @@ private:
 	Agent* agent;
 	World* world;
 	MCTS* mcts;
+	D_MCTS* dmcts;
 	std::string task_selection_method; // how do I select tasks
 	int planning_iter, last_planning_iter_end;
 	double initial_search_time, reoccuring_search_time;
@@ -47,7 +49,7 @@ private:
 	void select_task_by_impact_completion_value();
 
 	// MCTS
-	void new_MCTS_task_by_completion_reward();
+	void D_MCTS_task_by_completion_reward();
 	void MCTS_task_selection();
 	void MCTS_task_by_completion_reward();
 	void MCTS_task_by_completion_value();

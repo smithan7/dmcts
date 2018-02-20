@@ -9,10 +9,6 @@
   <arg name="pay_obstacle_costs"/>
   <arg name="not_simulation"/>
   <arg name="cruising_speed"/>
-  
-  <node pkg="tf" type="static_transform_publisher" name="map_2_world_broadcaster" args="0 0 0 0 0 0 1 world map 100" />
-  <node pkg="tf" type="static_transform_publisher" name="gps_2_world_broadcaster" args="0 0 0 0 0 0 1 world gps 100" />
-
 
   <group ns="dmcts_$(arg agent_index)">
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
@@ -27,9 +23,19 @@
     <param name="p_task_initially_active" type="double" value="$(arg p_task_initially_active)"/>
     <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
     <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
+    
     <group if="$(arg not_simulation)">
         <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
         <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
+    </group>
+    
+    <group>
+        <node pkg="xbee_bridge" name="xbee_bridge" type="xbee_bridge.py"/>
+        <param name="com_port" value="/dev/ttyUSB0"/>
+        <param name="baud_rate" value="9600"/>
+        <param name="com_type" value="agent"/>
+        <param name="fake_agent" value="false"/>
+        <param name="agent_index" value="$(arg agent_index)"/>
     </group>
   </group>
 

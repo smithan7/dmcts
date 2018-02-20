@@ -15,7 +15,7 @@ pid="pid $!"
 sleep 5s
 
 echo "launching hector quadrotor with kinect"
-roslaunch hector_quadrotor_gazebo mySpawn_quadrotor_with_kinect.launch &
+roslaunch hector_quadrotor_gazebo spawn_quadrotor_with_asus.launch &
 pid="$pid $!"
 
 sleep 5s
@@ -32,6 +32,18 @@ pid="$pid $!"
 
 sleep 5s
 
+echo "fixing movebase transform"
+rosrun tf static_transform_publisher 0 0 0 0 0 0 /base_link odom 100 &
+pid="$pid $!"
+sleep 1s
+
+echo "launching laser scan from depth image"
+rosrun depthimage_to_laserscan depthimage_to_laserscan image:=/camera/depth/image_raw camera_info:=/camera/depth/camera_info &
+roslaunch dmcts_world scan_from_depth_image.launch &
+pid="$pid $!"
+
+sleep 1s
+
 echo "launching rviz"
 rviz &
 pid="$pid $!"
@@ -39,8 +51,9 @@ pid="$pid $!"
 sleep 5s
 
 echo "launching pid controller"
-python ~/catkin_ws/src/hector_quadrotor/hector_quadrotor_gazebo/launch/pid_controller.py &
+python ~/catkin_ws/src/my_quad_controller/scripts/move_base_path_through.py &
 pid="$pid $!"
+sleep 10s
 
 trap "echo Killing all processes.; kill -2 TERM $pid; exit" SIGINT SIGTERM
 

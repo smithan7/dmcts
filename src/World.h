@@ -40,11 +40,11 @@ public:
 	double get_end_time() { return this->end_time; };
 	cv::String get_task_selection_method() { return this->task_selection_method; };
 	void get_task_status_list(std::vector<bool> &task_status, std::vector<int> &task_set);
+	bool get_task_status(const int &task_index);
 	std::string get_mcts_search_type() { return this->mcts_search_type; };
 	std::string get_mcts_reward_type() { return this->mcts_reward_type; };
 	std::string get_impact_style() { return this->impact_style; };
 	void set_mcts_reward_type(const std::string & rt) { this->mcts_reward_type = rt; };
-	bool get_task_status(const int &ti) { return this->task_status_list[ti]; };
 	int get_mcts_n_kids() { return this->mcts_n_kids; };
 	void reset_task_status_list();
 	double get_max_task_reward(const int &tt){ return this->max_task_rewards[tt]; };
@@ -55,7 +55,7 @@ public:
 	double get_min_task_work(const int &tt){ return this->min_task_works[tt]; };
 
 	// utility functions
-	bool a_star(const int & start, const int & goal, const bool &pay_obstacle_cost, std::vector<int>& path, double & length);
+	bool a_star(const int & start, const int & goal, const bool &pay_obstacle_cost, const bool &need_path, std::vector<int>& path, double & length);
 	double dist2d(const double & x1, const double & x2, const double & y1, const double & y2);
 	bool dist_between_nodes(const int & n1, const int & n2, double & d);
 	void display_world(const int & ms);
@@ -77,6 +77,7 @@ private:
 	std::vector<double> max_task_times, min_task_times;
 	std::vector<double> max_task_works, min_task_works;
 	std::vector<cv::Point2d> starting_locs;
+	cv::Mat travel_distances, obstacle_distances;
 	
 
 	int my_agent_index;

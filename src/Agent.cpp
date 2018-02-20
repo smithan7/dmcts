@@ -15,19 +15,14 @@
 #include "nav_msgs/Odometry.h"
 #include <tf/transform_broadcaster.h>
 #include "angles/angles.h"
-#include <custom_messages/DMCTS_Travel_Goal.h>
-#include <custom_messages/DMCTS_Probability.h>
-#include "custom_messages/Get_Task_List.h"
-#include "custom_messages/Complete_Work.h"
-#include "custom_messages/Recieve_Agent_Locs.h"
-
-
 
 Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, const double &travel_vel, const cv::Scalar &color, const bool &pay_obstacle_cost, const double &work_radius, const bool &actual_agent, World* world_in, const double &des_alt){
 	this->initialized = false;
 	this->map_offset_x = 0.0;
 	this->map_offset_y = 0.0;
 	this->desired_alt = des_alt;
+	this->last_pulse_time = ros::Time::now();
+	this->pulse_duration = ros::Duration(3.0);
 	// am I the actual agent or a dummy agent?
 	if(!actual_agent){
 		// dummy agent
@@ -96,29 +91,49 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		}
 
 		this->index = index_in;
+		// Publish to Quad
 		char bf[50];
 		int n = sprintf(bf, "/dmcts_%i/travel_goal", this->index);
 		this->move_pub = nHandle.advertise<custom_messages::DMCTS_Travel_Goal>(bf, 10);
-		this->coord_pub = nHandle.advertise<custom_messages::DMCTS_Probability>("/dmcts_master/team_coordination", 10);
-		ROS_WARN("still depending on world node to publish tasks");
-		//this->work_complete_pub = nHandle.advertise<custom_messages::DMCTS_Work_Complete>("/dmcts_master/work_complete", 10);
+
+		// Subscribe to Quad
 		n = sprintf(bf, "/uav%i//ground_truth/state", this->index);
 		this->odom_sub = nHandle.subscribe(bf, 1, &Agent::odom_callback, this);
-		this->coord_sub = nHandle.subscribe("/dmcts_master/team_coordination", 10, &Agent::coord_plan_callback, this);
+		
+		// Subscribe to topics via Xbee
+		this->coord_sub = nHandle.subscribe("/dmcts_master/coordination", 10, &Agent::coordination_callback, this);
 		this->pulse_sub = nHandle.subscribe("/dmcts_master/pulse", 1, &Agent::pulse_callback, this);
+		this->task_list_sub = nHandle.subscribe("/dmcts_master/task_list", 5, &Agent::task_list_callback, this);
+		this->work_status_sub = nHandle.subscribe("/dmcts_master/work_status", 10, &Agent::work_status_callback, this);
 
-		this->plan_duration = ros::Duration(0.5);
-		this->act_duration = ros::Duration(1.0);
+		// Publish to Topics via XBee
+		this->coord_pub = nHandle.advertise<custom_messages::DMCTS_Coordination>("/dmcts_master/coordination", 10);
+		this->loc_pub = nHandle.advertise<custom_messages::DMCTS_Loc>("/dmcts_master/loc", 10);
+		this->request_task_list_pub = nHandle.advertise<custom_messages::DMCTS_Request_Task_List>("/dmcts_master/request_task_list", 10);
+		this->request_work_pub = nHandle.advertise<custom_messages::DMCTS_Request_Work>("/dmcts_master/request_work", 10);
+
+		// Timer Durations
+		this->plan_duration = ros::Duration(1);
+		this->act_duration = ros::Duration(0.1);
 		this->send_loc_duration = ros::Duration(1.0);
-		this->task_list_duration = ros::Duration(5.0);
+		
+		this->task_list_timer_duration = ros::Duration(0.5); // How frequently do I check if I need to update the task list
+		this->task_list_wait_duration = ros::Duration(3.0); // Wait for reply before resending request
+		this->task_list_request_sent_time = ros::Time::now();
+		
+		this->work_request_timer_duration = ros::Duration(0.1); // Check if I need to resend the task list
+		this->work_wait_duration = ros::Duration(1.0); // Wait 3 seconds before sending a second request for work
+		this->work_request_sent_time = ros::Time::now();
+
+		// Timer Callbacks
 		this->plan_timer = nHandle.createTimer(this->plan_duration, &Agent::plan_timer_callback, this);
 		this->act_timer = nHandle.createTimer(this->act_duration, &Agent::act_timer_callback, this);
-		this->send_loc_timer = nHandle.createTimer(this->send_loc_duration, &Agent::send_loc_service_timer_callback, this);
-		this->task_list_timer = nHandle.createTimer(this->task_list_duration, &Agent::task_list_timer_callback, this);
+		this->send_loc_timer = nHandle.createTimer(this->send_loc_duration, &Agent::publish_loc_timer_callback, this);
+		this->task_list_timer = nHandle.createTimer(this->task_list_timer_duration, &Agent::task_list_timer_callback, this);
+		this->work_timer = nHandle.createTimer(this->work_request_timer_duration, &Agent::work_timer_callback, this);
 
-		this->task_list_client = nHandle.serviceClient<custom_messages::Get_Task_List>("/dmcts_master/get_task_list");
-		this->send_loc_client = nHandle.serviceClient<custom_messages::Recieve_Agent_Locs>("/dmcts_master/recieve_agent_locs");
-		this->work_client = nHandle.serviceClient<custom_messages::Complete_Work>("/dmcts_master/complete_work");
+		this->waiting_on_work_status = false;
+		this->waiting_on_task_list = false;
 
 		this->edge.x = -1;
 		this->edge.y = -1;
@@ -146,27 +161,63 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 	}
 }
 
-/*void Agent::clock_callback(const rosgraph_msgs::Clock &tmIn){
-	this->world->set_time(tmIn.clock.now().toSec());
-}*/
-
-void Agent::pulse_callback(const custom_messages::DMCTS_Pulse &msg){
-	if(this->index > msg.my_index){
-		this->world->set_time(msg.c_time);
+void Agent::task_list_timer_callback(const ros::TimerEvent &e){
+	if(this->waiting_on_task_list == false){
+		return;
 	}
-	if(this->world->get_n_active_tasks() != msg.n_active_tasks){
-		this->send_request_for_task_list();
+
+	if(ros::Time::now() - this->task_list_request_sent_time > this->task_list_wait_duration){
+		this->publish_task_list_request();
 	}
 }
 
-void Agent::publish_coord_plan(){
-	custom_messages::DMCTS_Probability msg = custom_messages::DMCTS_Probability();
+void Agent::work_timer_callback(const ros::TimerEvent &e){
+	if(this->waiting_on_work_status == false){
+		return;
+	}
+
+	if(ros::Time::now() - this->work_request_sent_time > this->work_wait_duration){
+		this->publish_work_request(this->goal_node->get_index());
+	}
+}
+
+void Agent::pulse_callback(const custom_messages::DMCTS_Pulse &msg){
+	
+	this->last_pulse_time = ros::Time::now();
+	if(this->index > msg.my_index){
+		this->world->set_time(msg.c_time);
+	}
+	if(msg.status == 1){
+    	this->m_node_initialized = true;
+    	this->run_status = 1; // all good, run
+    }
+    else{
+    	if(this->m_node_initialized){
+			// had a problem, go back to waiting
+			this->run_status = 0;
+		    ROS_ERROR("Agent[%i]::pulse_callback: Ground Station has an Error: DMCTS_Loc", this->index);
+		    return;
+    	}
+    	else{
+	    	// problem, wait
+	    	ROS_WARN("DMCTS::Agent[%i]::pulse_callback: Waiting to run (%i)", this->index, this->run_status);
+	    	this->run_status = 0;
+    	}
+	}
+	if(this->world->get_n_active_tasks() != msg.n_active_tasks){
+		this->request_task_list();
+		this->waiting_on_task_list = true;
+	}
+}
+
+void Agent::publish_coordination(){
+	custom_messages::DMCTS_Coordination msg = custom_messages::DMCTS_Coordination();
 	msg.agent_index = this->index;
 	this->coordinator->get_plan(msg.claimed_tasks, msg.claimed_time, msg.claimed_probability);
 	coord_pub.publish(msg);
 }
 
-void Agent::coord_plan_callback(const custom_messages::DMCTS_Probability &msg){
+void Agent::coordination_callback(const custom_messages::DMCTS_Coordination &msg){
 	//ROS_WARN("my index is %i and msg.index is %i", this->index, msg.agent_index);
 	if(this->index == msg.agent_index){
 	//	ROS_WARN("returning");
@@ -189,8 +240,11 @@ void Agent::upload_new_plan(const std::vector<int> &claimed_tasks, const std::ve
 	this->coordinator->upload_new_plan(claimed_tasks, claimed_time, claimed_probability);
 }
 
-void Agent::task_list_timer_callback(const ros::TimerEvent &e){
-	this->send_request_for_task_list();
+void Agent::publish_task_list_request(){
+	custom_messages::DMCTS_Request_Task_List msg;
+	msg.request = 1; // This can literally be anything...
+	this->request_task_list_pub.publish(msg);
+	this->task_list_request_sent_time = ros::Time::now();	
 }
 
 void Agent::plan_timer_callback(const ros::TimerEvent &e){
@@ -201,12 +255,12 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 			}
 			else{
 				this->plan_initialized = true;
-				this->publish_coord_plan();
+				this->publish_coordination();
 			}
 		}
 		else{
 			ROS_WARN("Agent[%i]::plan_timer_callback: task_list_initialized is FALSE", this->index);
-			this->send_request_for_task_list();
+			this->publish_task_list_request();
 		}
 	}
 	else{
@@ -225,37 +279,23 @@ void Agent::act_timer_callback(const ros::TimerEvent &e){
 	}
 }
 
-void Agent::send_loc_service_timer_callback(const ros::TimerEvent &e){
-	//why does this->index iterate 1-> 5 ???
-	custom_messages::Recieve_Agent_Locs srv;
-	srv.request.index = this->index;
-	srv.request.xLoc = this->pose->get_x();
-	srv.request.yLoc = this->pose->get_y();
-	srv.request.alt = this->pose->get_z();
-	srv.request.yaw = this->pose->get_yaw();
-	srv.request.edge_x = this->edge.x;
-	srv.request.edge_y = this->edge.y;
-	srv.request.status = int8_t(this->run_status);
-
-	//ROS_INFO("DMCTS::Agent::send_loc_service_timer_callback: req.status[%i]: %i", this->index, this->run_status);
-	//ROS_INFO("   Z: = %0.1f and desired_alt = %0.1f", this->pose->get_z(), this->desired_alt);
-	if (this->send_loc_client.call(srv)){
-	    if(srv.response.f){
-	    	this->m_node_initialized = true;
-	    	this->run_status = 1; // all good, run
-	    }
-	    else{
-	    	// problem, wait
-	    	ROS_WARN("DMCTS::Agent[%i]::send_loc_service_timer_callback: Waiting to run (%i)", this->index, this->run_status);
-	    	this->run_status = 0;
-	    }
-	}
-	else{
-		// had a problem, go back to waiting
+void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
+	
+	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration){
 		this->run_status = 0;
-	    ROS_ERROR("Agent[%i]::send_loc_service_timer_callback: Failed to call service: Recieve_Agent_Locs", this->index);
-	    return;
+		ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
 	}
+
+
+	custom_messages::DMCTS_Loc msg;
+	msg.index = this->index;
+	msg.xLoc = this->pose->get_x();
+	msg.yLoc = this->pose->get_y();
+	msg.edge_x = this->edge.x;
+	msg.edge_y = this->edge.y;
+	msg.status = int8_t(this->run_status);
+
+	this->loc_pub.publish(msg);
 }
 
 void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
@@ -301,7 +341,7 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 			this->goal_node->set_index(mindex);
 			this->location_initialized = true;
 		}
-	}
+	}	
 	else{ // I have been initialized, check if my edge should be updated
 		double dist_to_edge_y = sqrt( pow(this->world->get_nodes()[this->edge.y]->get_x() - this->pose->get_x(),2) + pow(this->world->get_nodes()[this->edge.y]->get_y() - this->pose->get_y(),2) );
 		double cost = INFINITY;
@@ -326,70 +366,77 @@ void Agent::update_pose(const double &xi, const double &yi, const double &zi, co
 }
 
 void Agent::publish_to_control_script(const int &ni){
-	custom_messages::DMCTS_Travel_Goal msg = custom_messages::DMCTS_Travel_Goal();
+	custom_messages::DMCTS_Travel_Goal msg;
 	msg.x = this->world->get_nodes()[ni]->get_x();
 	msg.y = this->world->get_nodes()[ni]->get_y();
 	this->move_pub.publish(msg);
 }
 
 void Agent::publish_work_request(const int &goal_node ){
-	custom_messages::Complete_Work srv;
-	srv.request.n_index = goal_node;
-	srv.request.xLoc = this->pose->get_x();
-	srv.request.yLoc = this->pose->get_y();
-	srv.request.a_type = this->type;
-	srv.request.c_time = this->world->get_c_time();
-	srv.request.work_rate = this->act_duration.toSec();
-	if (this->work_client.call(srv)){
-	    int a;
-	}
-	else{
-	    ROS_ERROR("Agent[%i]::publish_work_request: Failed to call service Complete_Work", this->index);
-	    return;
-	}	
+	custom_messages::DMCTS_Request_Work msg;
+	msg.n_index = goal_node;
+	msg.a_index = this->index;
+	this->request_work_pub.publish(msg);
 }
 
-void Agent::send_request_for_task_list(){
-	custom_messages::Get_Task_List srv;
-	srv.request.f = true;
-	//ROS_ERROR("Agent[%i]::send_request_for_task_list: sent");
-	if (this->task_list_client.call(srv)){
-		//ROS_WARN("Agent[%i]::send_request_for_task_list: recieved");
-		//ROS_WARN("Agent[%i]::send_request_for_task_list: %i", int(srv.response.node_indices.size()));
-		//ROS_WARN("Agent[%i]::send_request_for_task_list: %i", int(srv.response.xLoc.size()));
-		//ROS_WARN("Agent[%i]::send_request_for_task_list: %i", int(srv.response.yLoc.size()));
-		//ROS_WARN("Agent[%i]::send_request_for_task_list: %i", int(srv.response.reward.size()));
+void Agent::request_task_list(){
+	//ROS_ERROR("Agent[%i]::request_task_list: sent");
+	custom_messages::DMCTS_Request_Task_List msg;
+	msg.request = 1;
+	this->request_task_list_pub.publish(msg);
+}
 
-		// check if any currently active tasks need to be deactivated
-	    for(size_t i=0; i<this->world->get_nodes().size(); i++){
-	   		if(this->world->get_nodes()[i]->is_active()){
-	   			bool flag = true;
-	   			for(size_t j=0; j<srv.response.node_indices.size(); j++){
-	   				if(this->world->get_nodes()[i]->get_index() == srv.response.node_indices[j]){
-	   					flag = false;
-	   					break;
-	   				}
-	   			}
-	   			// not in list, deactivate
-	   			if(flag){
-	   				this->world->deactivate_task(i);
-	   			}
-	   		}
-	   	}
-	   	// activate all nodes that are not currently active
-	    for(size_t i=0; i<srv.response.node_indices.size(); i++){
-	   		if(!this->world->get_nodes()[srv.response.node_indices[i]]->is_active()){
-	   			this->world->activate_task(srv.response.node_indices[i]);	
-	   		}
-	    }
-	    this->world->reset_task_status_list();
-	    this->task_list_initialized = true;
-	    
+void Agent::work_status_callback(const custom_messages::DMCTS_Work_Status &msg){
+	if (msg.success == 0){
+		this->world->get_nodes()[msg.n_index]->deactivate();
+		return;
 	}
-	else{
-	    ROS_ERROR("Agent[%i]::send_request_for_task_list: Failed to call service get_task_list", this->index);
-	    return;
+
+
+	if(msg.a_index == this->index){
+		// is it me
+		if(msg.success == 1){
+			// I did some work, but not complete
+			ROS_INFO("Agent::work_status_callback: I worked on node %i", msg.n_index);
+		}
+		if(msg.success == -1){
+			// I failed to do work
+			ROS_WARN("Agent::work_status_callback: I Failed to do work on node %i", msg.n_index);
+		}
 	}
+	this->waiting_on_work_status = false;
+}
+
+void Agent::task_list_callback(const custom_messages::DMCTS_Task_List &msg){
+	
+	//ROS_WARN("Agent[%i]::task_list_callback: recieved");
+	//ROS_WARN("Agent[%i]::task_list_callback: %i", int(srv.response.node_indices.size()));
+	
+	// check if any currently active tasks need to be deactivated
+    for(size_t i=0; i<this->world->get_nodes().size(); i++){
+   		if(this->world->get_nodes()[i]->is_active()){
+   			bool flag = true;
+   			for(size_t j=0; j<msg.node_indices.size(); j++){
+   				if(this->world->get_nodes()[i]->get_index() == msg.node_indices[j]){
+   					flag = false;
+   					break;
+   				}
+   			}
+   			// not in list, deactivate
+   			if(flag){
+   				this->world->deactivate_task(i);
+   			}
+   		}
+   	}
+   	// activate all nodes that are not currently active
+    for(size_t i=0; i<msg.node_indices.size(); i++){
+   		if(!this->world->get_nodes()[msg.node_indices[i]]->is_active()){
+   			this->world->activate_task(msg.node_indices[i]);	
+   		}
+    }
+    this->world->reset_task_status_list();
+    this->task_list_initialized = true;
+    this->waiting_on_task_list = false;    
 }
 
 bool Agent::at_node(int node) {
@@ -426,9 +473,10 @@ void Agent::select_next_edge() {
 
 	std::vector<int> path;
 	double length = 0.0;
-
+	bool need_path = true;
+	
 	this->edge_progress = 0.0;
-	if ( this->world->a_star(this->edge.x, this->goal_node->get_index(), this->pay_obstacle_cost, path, length)) {
+	if ( this->world->a_star(this->edge.x, this->goal_node->get_index(), this->pay_obstacle_cost, need_path, path, length)) {
 		if (path.size() >= 2) {
 			this->edge.y = path.end()[-2];
 		}
@@ -459,11 +507,13 @@ bool Agent::at_goal() { // am I at my goal node?
 bool Agent::plan(){
 	//ROS_INFO("Agent[%i]::plan: in", this->index);
 	if(this->location_initialized){
-		//ROS_INFO("Agent[%i]::plan: this->edge.x: %i", this->index, this->edge.x);
-		this->planner->plan(); // I am not at my goal, select new goal
+		//ROS_INFO("Agent[%i]::plan: this->edge: %i -> %i", this->index, int(this->edge.x), int(this->edge.y));
+		this->planner->plan(); // Figure out where to go
 		//ROS_INFO("Agent[%i]::plan: out of planner->plan", this->index);
-		this->coordinator->advertise_task_claim(this->world); // select the next edge on the path to goal
+		//ROS_INFO("Agent[%i]::plan: on edge %i -> %i", this->index, int(this->edge.x), int(this->edge.y));
+		this->coordinator->advertise_task_claim(this->world); // Advertise where I am going
 		//ROS_INFO("Agent[%i]::plan: out of advertise_task_claim", this->index);
+		//ROS_INFO("Agent[%i]::plan: on edge %i -> %i", this->index, int(this->edge.x), int(this->edge.y));
 		return true;
 	}
 	else{
@@ -488,7 +538,7 @@ bool Agent::act() {
 
 	//ROS_INFO("Agent[%i]::act: in", this->index);
 	// am  I at a node?
-	//ROS_WARN("At node: %i", this->edge.x);
+	//ROS_WARN("Agent[%i]::act: on edge: %i -> %i", this->index, this->edge.x, this->edge.y);
 	bool an = false;
 	if (this->at_node(this->edge.x)){
 		// if my current node is active

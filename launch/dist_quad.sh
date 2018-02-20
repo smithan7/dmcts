@@ -14,7 +14,7 @@ pid="pid $!"
 sleep 5s
 
 echo "launching hector quadrotor"
-roslaunch hector_quadrotor_gazebo MySpawn_quadrotor.launch &
+roslaunch hector_quadrotor_gazebo spawn_quadrotor.launch &
 pid="$pid $!"
 
 sleep 5s
