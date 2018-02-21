@@ -26,7 +26,7 @@ int main(int argc, char *argv[]){
 	ros::param::get("world_directory", world_directory);
 	ros::param::get("score_run", score_run);
 	ros::param::get("display_map", display_map);
-	ros::param::get("/dmcts/parameter_seed", parameter_seed);
+	ros::param::get("param_number", parameter_seed);
 	ros::param::get("number_of_nodes", n_nodes);
 	ros::param::get("number_of_agents", n_agents);
 	ros::param::get("coord_method", task_selection_method);
