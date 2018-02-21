@@ -5,6 +5,7 @@
   <arg name="coord_method"/>
   <arg name="agent_index"/>
   <arg name="desired_altitude"/>
+  <arg name="param_number"/>
   <arg name="p_task_initially_active"/>
   <arg name="pay_obstacle_costs"/>
   <arg name="not_simulation"/>
@@ -12,7 +13,7 @@
 
   <group ns="dmcts_$(arg agent_index)">
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
-    <param name="test_environment_number" value="0"/>
+    <param name="param_number" value="$(arg param_number)"/>
     <param name="agent_index" value="$(arg agent_index)"/>
     <param name="world_directory" type="str" value="//home/nvidia/catkin_ws/src/dmcts_world/worlds/"/>
     <param name="display_map" type="bool" value="false"/>
