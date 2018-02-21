@@ -34,7 +34,7 @@
         <param name="com_port" value="/dev/ttyUSB0"/>
         <param name="baud_rate" value="9600"/>
         <param name="com_type" value="agent"/>
-        <param name="fake_agent" value="true"/>
+        <param name="fake_agent" value="false"/>
         <param name="agent_index" value="$(arg agent_index)"/>
     </group>
   </group>

@@ -485,7 +485,7 @@ void World::display_world(const int &ms) {
 					double dist = 0.0;
 					if (this->nodes[i]->get_nbr_obstacle_cost(iter, cost) && this->nodes[i]->get_nbr_distance(iter, dist)) {
 						cost = (cost - dist) / cost;
-						cv::Vec3b pink(uchar(255.0*(1.0 - cost)), uchar(255.0*(1.0 - cost)), 255);
+						cv::Scalar pink(uchar(255.0*(1.0 - cost)), uchar(255.0*(1.0 - cost)), 255);
 						cv::Point2d p1 = this->nodes[i]->get_loc();
 						cv::Point2d p2 = this->nodes[index]->get_loc();
 						p1.x = scale_x * (p1.x + this->map_width/2); p1.y = scale_y * (p1.y + this->map_height/2);
