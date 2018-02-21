@@ -15,7 +15,7 @@
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
     <param name="param_number" value="$(arg param_number)"/>
     <param name="agent_index" value="$(arg agent_index)"/>
-    <param name="world_directory" type="str" value="/home/andy/catkin_ws/src/dmcts_world/worlds/"/>
+    <param name="world_directory" type="str" value="//home/nvidia/catkin_ws/src/dmcts_world/worlds/"/>
     <param name="display_map" type="bool" value="false"/>
     <param name="number_of_nodes" value="$(arg num_nodes)"/>
     <param name="number_of_agents" value="$(arg num_agents)"/>
@@ -35,7 +35,7 @@
         <param name="com_port" value="/dev/ttyUSB0"/>
         <param name="baud_rate" value="9600"/>
         <param name="com_type" value="agent"/>
-        <param name="fake_agent" value="false"/>
+        <param name="fake_agent" value="true"/>
         <param name="agent_index" value="$(arg agent_index)"/>
     </group>
   </group>
