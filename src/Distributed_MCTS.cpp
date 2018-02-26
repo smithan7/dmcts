@@ -189,8 +189,10 @@ void Distributed_MCTS::search(const bool &am_root, const int &depth_in, const do
 
 	if (am_root && this->last_update_index != update_index){
 		// I am the root and this is the first search of this iteration, check my travel time and update completion time
-		this->travel_time = this->agent->get_travel_time(this->task_index);
-		this->update_my_completion_time();
+		if(this->agent->get_travel_time(this->task_index, this->travel_time)){
+			this->update_my_completion_time();	
+		}
+		
 	}
 	else if( fabs(time_in - this->parent_time) > 0.2) {
 		// has my parents completion time moved? If yes, then I should update my arrival/completion time, probability, and then reward
@@ -260,109 +262,98 @@ void Distributed_MCTS::update_down_branch_expected_reward() {
 	this->down_branch_expected_reward = this->expected_reward + max_kid_branch_reward;
 }
 
-void Distributed_MCTS::sample_tree_and_advertise_task_probabilities(Agent_Coordinator* coord_in) {
-	if (this->completion_time > this->world->get_end_time()) {
+void Distributed_MCTS::sample_tree(Agent_Coordinator* coord_in, int &depth){
+	// Sample the tree and update probable actions
+
+	if(depth == 0){
+		// I am the root, reset probable actions
+		coord_in->reset_prob_actions();
+	}
+
+	// add stop to coordinator
+	coord_in->add_stop_to_my_path(this->task_index, this->completion_time, this->branch_probability);
+	if(depth > this->max_search_depth){
+		// Too deep, don't continue sampling
 		return;
 	}
-	
-	// add my task to coordinator
-	coord_in->add_stop_to_my_path(this->task_index, this->completion_time, this->raw_probability);
-	if(this->kids.size() == 0){
-		return;
-	}
-	// sample my children and assign probability
-	this->find_kid_probabilities();
-	// those kids who are good enough I should continue to sample
-	for (size_t i = 0; i < this->kids.size(); i++) {
-		//ROS_INFO("Distributed_MCTS::sample_tree_and_advertise_task_probabilities: kid[%i] probs: %0.2f and thresh is %0.2f", int(i), this->kids[i]->get_probability(), this->min_sampling_probability_threshold);
-		if (this->kids[i]->get_branch_probability() > this->min_sampling_probability_threshold) {
-			//std::cerr << "Distributed_MCTS::sample_tree_and_advertise_task_probabilities: this->kids[]->get_task_index(): " << this->kids[i]->get_task_index() << std::endl;
-			this->kids[i]->sample_tree_and_advertise_task_probabilities(coord_in);
-		}
-	}
+   
+    // only continue if I have kids
+    if(this->kids.size() == 0){
+    	return;
+    }
+
+    // find max kid!
+    double maxR = -INFINITY;
+    int maxI = -1;
+    for(size_t i=0; i<this->kids.size(); i++){
+        if(this->kids[i]->get_down_branch_expected_reward() > maxR){
+            maxR = this->kids[i]->get_down_branch_expected_reward();
+            maxI = i;
+        }
+    }
+    
+    double sumPP = 0.0;
+    for(size_t i=0; i<this->kids.size(); i++){
+        if(i == maxI){
+            this->kids[i]->raw_probability =  this->kids[i]->raw_probability + this->alpha*(1.0 - this->kids[i]->raw_probability);
+        }
+        else{
+            this->kids[i]->raw_probability =  this->kids[i]->raw_probability + this->alpha*(0,0 - this->kids[i]->raw_probability);
+        }
+        sumPP = sumPP+ this->kids[i]->raw_probability;
+    }
+    
+    depth++;
+    for(size_t i=0; i<this->kids.size(); i++){
+       this->kids[i]->raw_probability = this->kids[i]->raw_probability/sumPP;  // normalize
+       this->kids[i]->branch_probability = this->branch_probability * this->kids[i]->raw_probability;
+       if (this->kids[i]->branch_probability > this->min_sampling_probability_threshold){
+           this->kids[i]->sample_tree(coord_in, depth);
+       }
+    }
 }
 
-void Distributed_MCTS::update_probable_actions() {
-	if (this->completion_time > this->world->get_end_time()) {
-		return;
-	}
-	
-	if(this->kids.size() == 0){
-		return;
-	}
-	// sample my children and assign probability
-	this->find_kid_probabilities();
-	// those kids who are good enough I should continue to sample
-	for (size_t i = 0; i < this->kids.size(); i++) {
-		//ROS_INFO("Distributed_MCTS::sample_tree_and_advertise_task_probabilities: kid[%i] probs: %0.2f and thresh is %0.2f", int(i), this->kids[i]->get_probability(), this->min_sampling_probability_threshold);
-		if (this->kids[i]->get_branch_probability() > this->min_sampling_probability_threshold) {
-			//std::cerr << "Distributed_MCTS::sample_tree_and_advertise_task_probabilities: this->kids[]->get_task_index(): " << this->kids[i]->get_task_index() << std::endl;
-			this->kids[i]->update_probable_actions();
-		}
-	}
-}
-
-void Distributed_MCTS::find_kid_probabilities() {
-	if(this->kids.size() == 0){
+void Distributed_MCTS::sample_tree(int &depth){
+	// Sample the tree and update probable actions
+	if(depth > this->max_search_depth){
+		// Too deep, don't continue sampling
 		return;
 	}
 
-	// for all kids, assign their probability
-	// Use Gradient descent to get kid probabilities
-	if(this->kids[0]->get_probability() == -1.0){
-		// need to initialize probabilities
-		double sumR = 0.0;
-		for(size_t i=0; i<this->kids.size(); i++){
-			sumR += this->kids[i]->get_down_branch_expected_reward();
-		}
-		// Set initial probs
-		for(size_t i=0; i<this->kids.size(); i++){
-			double p = this->raw_probability * (this->kids[i]->get_down_branch_expected_reward() / sumR);
-			this->kids[i]->set_probability(p);
-		}
-	}
-	else{
-		// Probabilities are initialized, start gradient descent
-		// Get max kid
-		int maxK = -1;
-		double maxR = -INFINITY;
-		for (size_t i = 0; i < this->kids.size(); i++) {
-			if(this->kids[i]->get_down_branch_expected_reward() > maxR){
-				maxR = this->kids[i]->get_down_branch_expected_reward();
-				maxK = i;
-			}
-		}
-		double pSum = 0.0;
-		//ROS_WARN("Distributed_MCTS::find_kid_probabilities: maxK: %i (task %i) with maxR: %0.1f", maxK, this->kids[maxK]->get_task_index(), maxR);
-		// Adjust probabilities
-		for (size_t i=0; i<this->kids.size(); i++){
-			//ROS_WARN("Distributed_MCTS::find_kid_probabilities: p_init[%i]: %0.2f", int(i), this->kids[i]->get_probability());
-			if (int(i) == maxK){
-				// I am the best kid, increase my probability
-				double p = this->kids[i]->get_probability() + this->kids[i]->get_alpha() * (1.0 - this->kids[i]->get_probability());
-				this->kids[i]->set_probability(p);
-			}
-			else{
-				// I am not the best kid, decrease my probability
-				double p = this->kids[i]->get_probability() + this->kids[i]->get_alpha() * (0.0 - this->kids[i]->get_probability());
-				this->kids[i]->set_probability(p);
-			}
-			//ROS_WARN("Distributed_MCTS::find_kid_probabilities: p_final[%i]: %0.2f", int(i), this->kids[i]->get_probability());
-			pSum += this->kids[i]->get_probability();
-		}
-		// Normalize Probabilities
-		for(size_t i=0; i<this->kids.size(); i++){
-			double p = this->kids[i]->get_probability() / pSum;
-			this->kids[i]->set_probability( this->raw_probability * p );
-		}
-	}
-}
+    // only continue if I have kids
+    if(this->kids.size() == 0){
+    	return;
+    }
 
-void Distributed_MCTS::reset_mcts_team_prob_actions(){
-	this->reset_task_availability_probability();
-	for (size_t i = 0; i < this->kids.size(); i++) {
-		this->kids[i]->reset_task_availability_probability();
-	}	
+    // find max kid!
+    double maxR = -INFINITY;
+    int maxI = -1;
+    for(size_t i=0; i<this->kids.size(); i++){
+        if(this->kids[i]->get_down_branch_expected_reward() > maxR){
+            maxR = this->kids[i]->get_down_branch_expected_reward();
+            maxI = i;
+        }
+    }
+    
+    double sumPP = 0.0;
+    for(size_t i=0; i<this->kids.size(); i++){
+        if(i == maxI){
+            this->kids[i]->raw_probability =  this->kids[i]->raw_probability + this->alpha*(1.0 - this->kids[i]->raw_probability);
+        }
+        else{
+            this->kids[i]->raw_probability =  this->kids[i]->raw_probability + this->alpha*(0.0 - this->kids[i]->raw_probability);
+        }
+        sumPP = sumPP+ this->kids[i]->raw_probability;
+    }
+    
+    depth++; // update depth for next level
+    for(size_t i=0; i<this->kids.size(); i++){
+       this->kids[i]->raw_probability = this->kids[i]->raw_probability/sumPP;  // normalize
+       this->kids[i]->branch_probability = this->branch_probability * this->kids[i]->raw_probability;
+       if (this->kids[i]->branch_probability > this->min_sampling_probability_threshold){
+           this->kids[i]->sample_tree(depth);
+       }
+    }
 }
 
 void Distributed_MCTS::update_my_completion_time(){

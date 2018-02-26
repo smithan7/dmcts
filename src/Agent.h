@@ -99,6 +99,7 @@ public:
 	Agent_Planning* get_planner() { return this->planner; };
 	World* get_world() { return this->world; };
 	double get_arrival_time() { return this->arrival_time; }
+	bool get_travel_time(const int &ti, double &travel_time);
 	
 	int get_type() { return this->type; };
 	double get_travel_vel() { return this->travel_vel; };

@@ -1,5 +1,6 @@
 #pragma once
 
+class Map_Node;
 
 class Pose{
 public:
@@ -12,6 +13,8 @@ public:
 	double get_yaw() {return this->yaw; };
 
 	void update_pose(const double &xi, const double &yi, const double &zi, const double wi);
+	double distance_to(Pose* &mn);
+	double distance_to(Map_Node* &mn);
 
 private:
 	double x,y,z,yaw;

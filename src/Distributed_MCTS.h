@@ -21,27 +21,29 @@ public:
 	double get_expected_reward() {return this->expected_reward; };
 	double get_n_pulls() { return this->number_pulls; };
 	double get_raw_probability() { return this->raw_probability; };
-	void set_raw_probability(const double &rp){this->raw_probability = rp; };
 	double get_branch_probability() {return this->branch_probability; };
-	void set_branch_probability(const double &bp) {this->branch_probability = bp; };
 	double get_raw_reward() { return this->raw_reward; };
-	std::vector<Distributed_MCTS*> get_kids() {return this->kids; }; // get access to kids
-	Map_Node* get_task() { return this->task; };
 	int get_task_index() { return this->task_index; };
 	double get_completion_time() { return this->completion_time; };
+	std::vector<Distributed_MCTS*> get_kids() {return this->kids; }; // get access to kids
+	Map_Node* get_task() { return this->task; };
+	
+	void set_raw_probability(const double &rp){this->raw_probability = rp; };
+	void set_branch_probability(const double &bp) {this->branch_probability = bp; };
 	void set_task_index(const int &ti) {this->task_index=ti; };
 	void reset_mcts_team_prob_actions();
 	void set_as_root() {this->raw_probability = 1.0; };
 
 	// call from parent not self
 	void search(const bool &am_root, const int &depth_in, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, int &rollout_depth, const int &update_index);
-	void reset_task_availability_probability() { this->probability_task_available = -1.0; };
-	void update_probable_actions();
-	void sample_tree_and_advertise_task_probabilities(Agent_Coordinator* coord_in); // get my probabilities to advertise
+	void sample_tree(Agent_Coordinator* coord_in, int &depth);
+	void sample_tree(int &depth);
 	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals);
+	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards);
+
+	// get rid of old parts of tree
 	void prune_branches(const int &max_child);
 	void burn_branches(); // don't save any kids, burn it all
-	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards);
 
 private:
 	// rollout does not create new nodes
@@ -50,7 +52,6 @@ private:
 	// update line for private
 	void update_down_branch_expected_reward(Distributed_MCTS* &gc); // update my branch reward, min, max, and sum
 	void update_down_branch_expected_reward(); // update my branch reward, min, max, and sum
-	void find_kid_probabilities(); // find and assign my kid probabilities
 	void update_raw_probability();
 	void update_my_completion_time();
 	void perform_initial_sampling();
@@ -87,13 +88,9 @@ private:
 	double branch_probability; // How likely am I to be selected accounting for my parent
 	double min_sampling_probability_threshold; // when probability drops below this, stop searching
 
-	void add_sw_uct_update(const double &min, const double &max, const int &planning_iter);
-
 	double number_pulls; // how many times have I been pulled
 	double beta, epsilon, gamma; // for ucb, d-ducb, sw-ucb
 	std::vector<Distributed_MCTS*> kids; // my kids
 
 
 };
-
-

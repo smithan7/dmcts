@@ -469,6 +469,31 @@ void Agent::work_on_task() {
 	this->work_done +=  this->world->get_nodes()[this->goal_node->get_index()]->get_acted_upon(this);
 }
 
+bool Agent::get_travel_time(const int &ti, double &travel_time){
+
+	// this has two parts
+		// - First: Get the travel time from current location to edge.y
+		// - Second: Get the travel time from edge.y to node[ti]
+		// travel_time = 1 + 2
+
+	// First: get travel time from current location to edge.y
+	double node_dist = this->pose->distance_to(this->world->get_nodes()[this->edge.y]);
+
+	// Second: A* path from edge.y to node[ti]
+	std::vector<int> path;
+	double path_length = 0.0;
+	bool need_path = false;
+	if ( this->world->a_star(this->edge.y, this->world->get_nodes()[ti]->get_index(), this->pay_obstacle_cost, need_path, path, path_length)){
+		double travel_distance = node_dist + path_length;
+		travel_time = travel_distance / this->travel_vel;
+		return true;
+	}
+	else{
+		travel_time = INFINITY;
+		return false;
+	}
+}
+
 void Agent::select_next_edge() {
 
 	std::vector<int> path;
