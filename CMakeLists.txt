@@ -133,6 +133,7 @@ add_executable(dmcts
 	src/Agent_Coordinator.cpp
 	src/Agent_Planning.cpp
 	src/D_MCTS.cpp
+	src/Distributed_MCTS.cpp
 	src/DMCTS_node.cpp
 	src/Fuzzy_Bin.cpp
 	src/Goal.cpp

@@ -114,7 +114,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 
 		// Timer Durations
 		this->plan_duration = ros::Duration(1);
-		this->act_duration = ros::Duration(4); Maybe split act into two pieces, one to broadcast goal and one to make decisions at nodes?
+		this->act_duration = ros::Duration(3);
 		this->send_loc_duration = ros::Duration(1.0);
 		
 		this->task_list_timer_duration = ros::Duration(0.5); // How frequently do I check if I need to update the task list
