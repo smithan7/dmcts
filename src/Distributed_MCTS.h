@@ -11,12 +11,13 @@ class World;
 class Distributed_MCTS
 {
 public:
-	Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent_in, Distributed_MCTS* parent, const int &my_kid_index, const int update_index);
+	Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent_in, Distributed_MCTS* parent, const int update_index);
 	~Distributed_MCTS();
 
 	Agent* get_agent() { return this->agent; };
 	double get_alpha() { return this->alpha; };
 	double get_down_branch_expected_reward() {return this->down_branch_expected_reward; }; // might have to calc a few things, not a simple return
+	double get_cumulative_reward() {return this->cumulative_reward; };
 	double get_distance() {return this->distance; };
 	double get_expected_reward() {return this->expected_reward; };
 	double get_n_pulls() { return this->number_pulls; };
@@ -30,6 +31,7 @@ public:
 	
 	void set_raw_probability(const double &rp){this->raw_probability = rp; };
 	void set_branch_probability(const double &bp) {this->branch_probability = bp; };
+	void set_cumulative_reward(const double &cr) {this->cumulative_reward = cr; };
 	void set_task_index(const int &ti) {this->task_index=ti; };
 	void reset_mcts_team_prob_actions();
 	void set_as_root() {this->raw_probability = 1.0; };

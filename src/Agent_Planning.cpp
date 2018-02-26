@@ -35,7 +35,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: got task_list (%i) / task_set (%i)", int(task_list.size()), int(task_set.size()));
 	if (!this->dist_mcts) {
 		//ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: initializing dist_mcts");
-		this->dist_mcts = new Distributed_MCTS(this->world, this->world->get_nodes()[this->get_agent()->get_loc()], this->get_agent(), NULL, 0, this->coord_update);
+		this->dist_mcts = new Distributed_MCTS(this->world, this->world->get_nodes()[this->get_agent()->get_loc()], this->get_agent(), NULL, this->coord_update);
 	}
 	this->coord_update++; // Make it a new planning iteration
 	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished initializing D_MCTS");
@@ -49,10 +49,11 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	Distributed_MCTS* parent_of_none = NULL; // this gets set in Dist-MCTS Root
 	int rollout_depth = -1; // Indicate rollout has NOT started!
 	int planning_iter = 0;
-	while( planning_iter < 10){//double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
+	while( planning_iter < 1){//double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
 		planning_iter++;
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
-
+		1-Follow the search down, claimed tasks are being reclaimed
+		2-I am still not updating the path properly
 		this->dist_mcts->search(true, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
 		//if( planning_iter % 1000 == 0){
 		//this->dist_mcts->sample_tree(depth_in);

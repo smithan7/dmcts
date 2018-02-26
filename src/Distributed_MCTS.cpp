@@ -9,8 +9,8 @@
 #include "ros/ros.h"
 
 
-Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent_in, Distributed_MCTS* parent, const int &my_kid_index, const int update_index){
-	ROS_WARN("Distributed_MCTS::Distributed_MCTS: initializing Distributed_MCTS class");
+Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent_in, Distributed_MCTS* parent, const int update_index){
+	//ROS_WARN("Distributed_MCTS::Distributed_MCTS: initializing Distributed_MCTS class");
 	this->agent = agent_in; // which agent am I?
 	this->task = task_in; // which task am I?
 	this->task_index = task_in->get_index(); // whats my index?
@@ -40,7 +40,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	this->expected_reward = 0.0; // Including coordination, how much am I worth?
 	this->down_branch_expected_reward = 0.0; // the expected reward for my best kids and their kids (recursive to max depth)
 	this->number_pulls = 0; // how many times have I been pulled
-	this->max_rollout_depth = 3; //edit these to ensure tree can grow on simple case
+	this->max_rollout_depth = 0; //edit these to ensure tree can grow on simple case
 	this->max_search_depth = 10; 
 
 	// sampling stuff
@@ -76,10 +76,13 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 			this->completion_time = this->parent_time + this->travel_time + this->work_time;
 			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: completion time complete");
 			this->raw_reward = this->task->get_reward_at_time(this->completion_time);
+			//ROS_INFO("Distributed_MCTS::Distributed_MCTS: got raw_reward: %0.2f", this->raw_reward);
 			this->update_probability_task_is_available();
-			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: got probability");
-			this->expected_reward = this->raw_reward * (1.0 - this->probability_task_available);
+			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: got probability_task_available: %0.2f", this->probability_task_available);
+			this->expected_reward = this->raw_reward * this->probability_task_available;
+			//ROS_INFO("Distributed_MCTS::Distributed_MCTS: got expected_reward: %0.2f", this->expected_reward);
 			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: got expected_reward");
+			this->down_branch_expected_reward = this->expected_reward;
 		}
 
 		else {
@@ -109,23 +112,23 @@ bool Distributed_MCTS::make_kids( const std::vector<bool> &task_status, const st
 	//ROS_WARN("Distributed_MCTS::make_kids: in with task_set.size(): %i", int(task_set.size()));
 	// Make kids
 	bool kids_made = false;
-	// potentially add a kid for each active task
-	for (size_t j = 0; j < task_set.size(); j++) {
+	for (size_t j = 0; j < task_set.size(); j++) { // potentially add a kid for each active task
 		//ROS_WARN("Distributed_MCTS::make_kids: checking kid[%i]", int(j));
-		// which task am I looking at
-		int ti = task_set[j]; // if task ti needs to be completed
-		if (task_status[ti]) {
+		int ti = task_set[j]; // which task am I looking at
+		if (task_status[ti]) { // if task ti needs to be completed
 			//ROS_WARN("Distributed_MCTS::make_kids: task[%i] is active", int(j));
-			Distributed_MCTS* kiddo = new Distributed_MCTS(this->world, this->world->get_nodes()[ti], this->agent, this, int(this->kids.size()), update_index);
+			Distributed_MCTS* kiddo = new Distributed_MCTS(this->world, this->world->get_nodes()[ti], this->agent, this, update_index);
 			this->kids.push_back(kiddo);
 			kids_made = true;
 		}
 	}
 
+
+
 	if(kids_made){
+		this->update_down_branch_expected_reward();
 		this->perform_initial_sampling();
 	}
-
 	return kids_made;
 }
 
@@ -167,9 +170,12 @@ bool Distributed_MCTS::ucb(Distributed_MCTS* &gc){
     double maxM = -INFINITY;
     for(int i=0; i<this->kids.size(); i++){
         double rr = (this->kids[i]->mean_reward-minR) / std::max(0.01,(maxR-minR));
+        ROS_INFO("Distributed_MCTS::ucb: kids[%i] has mean_reward: %0.2f with maxR %0.2f and minR %0.2f", i, this->kids[i]->mean_reward, maxR, minR);
         this->kids[i]->number_pulls = this->kids[i]->number_pulls * this->kids[i]->gamma;
-        double ee = this->kids[i]->beta*sqrt(this->kids[i]->epsilon*log(this->number_pulls)/std::max(0.01,this->kids[i]->number_pulls));
+        double ee = this->kids[i]->beta*sqrt(this->kids[i]->epsilon*log(std::max(0.01,this->number_pulls))/std::max(0.01,this->kids[i]->number_pulls));
+        ROS_INFO("Distributed_MCTS::ucb: kids[%i] has rr %0.2f + ee %0.2f = %0.2f against maxM %0.2f", int(i), rr,ee,rr+ee, maxM);
         if (rr + ee > maxM){
+        	ROS_INFO("Distributed_MCTS::ucb: new max kid");
             maxM = rr + ee;
             gc = this->kids[i];
         }
@@ -178,8 +184,8 @@ bool Distributed_MCTS::ucb(Distributed_MCTS* &gc){
 }
 
 void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int &rollout_depth, const int &update_index) {
-	ROS_ERROR("into search at depth: %i", depth_in);
-	//ROS_INFO("Distributed_MCTS::Search: Searching: %i", this->task_index);
+	//ROS_ERROR("into search at depth: %i", depth_in);
+	ROS_INFO("Distributed_MCTS::Search: Searching: %i at depth %i", this->task_index, depth_in);
 	if (task_status[this->task_index] == true) {
 		ROS_ERROR("Distributed_MCTS::search: bad task selected");
 		this->expected_reward = 0.0;
@@ -188,8 +194,8 @@ void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCT
 	}
 
 	if (!am_root && (depth_in > this->max_search_depth || parent->get_completion_time() > this->world->get_end_time() || rollout_depth > this->max_rollout_depth)) {
-		this->down_branch_expected_reward = -INFINITY;
-		this->raw_reward = -INFINITY;
+		this->down_branch_expected_reward = 0.0;
+		this->raw_reward = 0.0;
 		return;
 	}
 	else{
@@ -241,7 +247,7 @@ void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCT
 	if (this->kids.size() == 0) {
 		rollout_depth = std::max(0,rollout_depth);
 		if (!this->make_kids(task_status, task_set, update_index)) {
-			ROS_WARN("Distributed_MCTS::search: Failed to make kids");
+			//ROS_WARN("Distributed_MCTS::search: Failed to make kids");
 			return;
 		}
 	}
@@ -268,32 +274,42 @@ void Distributed_MCTS::update_down_branch_expected_reward(Distributed_MCTS* &gc)
 	// the kid, gc, who was just searched
     double maxR = -INFINITY;
     double minR = INFINITY;
-    int maxI = -1;
     for(int i=0; i<this->kids.size(); i++){
         if(this->kids[i]->down_branch_expected_reward < minR){
-            minR = this->kids[i]->down_branch_expected_reward;
+            minR = this->kids[i]->get_down_branch_expected_reward();
         }
         if(this->kids[i]->down_branch_expected_reward > maxR){
-            maxR = this->kids[i]->down_branch_expected_reward;
-            maxI = i;
+            maxR = this->kids[i]->get_down_branch_expected_reward();
         }
+
+	    ROS_ERROR("Distributed_MCTS::update_down_branch_expected_reward: down_branch_expected_reward[%i]: %0.2f", int(i), this->kids[i]->get_down_branch_expected_reward());
     }
     // update my down branch reward
     this->down_branch_expected_reward = this->expected_reward + maxR;
-    if(maxI > 0.0){
-        // update searched kids cumulative reward
-        this->kids[maxI]->cumulative_reward = this->kids[maxI]->cumulative_reward + (this->kids[maxI]->down_branch_expected_reward-minR) / std::max(0.001, maxR-minR);
-    }
+
+    // update searched kids cumulative reward
+    ROS_ERROR("Distributed_MCTS::update_down_branch_expected_reward: cumulative_reward: %0.2f with %0.2f and %0.2f", gc->get_cumulative_reward(), minR, maxR);
+    gc->set_cumulative_reward( gc->get_cumulative_reward() + (gc->get_down_branch_expected_reward()-minR) / std::max(0.001, maxR-minR));
+    ROS_ERROR("Distributed_MCTS::update_down_branch_expected_reward: cumulative_reward: %0.2f", gc->get_cumulative_reward());
 }
 
 void Distributed_MCTS::update_down_branch_expected_reward() {
-	double max_kid_branch_reward = -INFINITY;
+
+    double maxR = -INFINITY;
+    double minR = INFINITY;
 	for(size_t i=0; i<this->kids.size(); i++){
-		if(this->kids[i]->get_down_branch_expected_reward() > max_kid_branch_reward){
-			max_kid_branch_reward = this->kids[i]->get_down_branch_expected_reward();
-		}
+		if(this->kids[i]->get_down_branch_expected_reward() < minR){
+            minR = this->kids[i]->get_down_branch_expected_reward();
+        }
+        if(this->kids[i]->get_down_branch_expected_reward() > maxR){
+            maxR = this->kids[i]->get_down_branch_expected_reward();
+        }
 	}
-	this->down_branch_expected_reward = this->expected_reward + max_kid_branch_reward;
+
+	for(size_t i=0; i<this->kids.size(); i++){
+		this->kids[i]->set_cumulative_reward(this->kids[i]->get_cumulative_reward() + (this->kids[i]->get_down_branch_expected_reward()-minR) / std::max(0.001, maxR-minR));
+	}
+	this->down_branch_expected_reward = this->expected_reward + maxR;
 }
 
 void Distributed_MCTS::sample_tree(Agent_Coordinator* coord_in, int &depth){
@@ -431,8 +447,7 @@ void Distributed_MCTS::update_probability_task_is_available(){
 }
 
 void Distributed_MCTS::get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards){
-	ROS_INFO("Distributed_MCTS::get_best_path:node: %i", this->task_index);
-	ROS_INFO("Distributed_MCTS::get_best_path: parent_time / travel_time / work_time / completion_time: %0.2f / %0.2f / %0.2f / %0.2f", this->parent_time, this->travel_time, this->work_time, this->completion_time);
+	ROS_INFO("Distributed_MCTS::get_best_path at node: %i: with parent_time / travel_time / work_time / completion_time: %0.2f / %0.2f / %0.2f / %0.2f", this->task_index, this->parent_time, this->travel_time, this->work_time, this->completion_time);
 	path.push_back(this->task_index);
 	times.push_back(this->completion_time);
 	rewards.push_back(this->expected_reward);
@@ -454,11 +469,11 @@ void Distributed_MCTS::get_best_path(std::vector<int> &path, std::vector<double>
 }
 
 bool Distributed_MCTS::exploit_tree(int &max_kid_index, std::vector<std::string> &args, std::vector<double> &vals) {
-	double maxV = -INFINITY;
+	double maxR = -INFINITY;
 	int maxI = -1;
 	for(size_t i=0; i<this->kids.size(); i++){
-		if(this->kids[i]->get_down_branch_expected_reward() > maxV){
-			maxV = this->kids[i]->get_down_branch_expected_reward();
+		if(this->kids[i]->get_down_branch_expected_reward() > maxR){
+			maxR = this->kids[i]->get_down_branch_expected_reward();
 			maxI = i;
 		}
 	}
