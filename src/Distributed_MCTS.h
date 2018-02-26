@@ -11,7 +11,7 @@ class World;
 class Distributed_MCTS
 {
 public:
-	Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent_in, Distributed_MCTS* parent, const int &my_kid_index, const double &parent_time_in, const int update_index);
+	Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent_in, Distributed_MCTS* parent, const int &my_kid_index, const int update_index);
 	~Distributed_MCTS();
 
 	Agent* get_agent() { return this->agent; };
@@ -35,7 +35,7 @@ public:
 	void set_as_root() {this->raw_probability = 1.0; };
 
 	// call from parent not self
-	void search(const bool &am_root, const int &depth_in, const double &time_in, std::vector<bool> &task_status, std::vector<int> &task_set, int &rollout_depth, const int &update_index);
+	void search(const bool &am_root, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int &rollout_depth, const int &update_index);
 	void sample_tree(Agent_Coordinator* coord_in, int &depth);
 	void sample_tree(int &depth);
 	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals);
@@ -52,16 +52,21 @@ private:
 	// update line for private
 	void update_down_branch_expected_reward(Distributed_MCTS* &gc); // update my branch reward, min, max, and sum
 	void update_down_branch_expected_reward(); // update my branch reward, min, max, and sum
-	void update_raw_probability();
+	void update_probability_task_is_available();
 	void update_my_completion_time();
+	void update_my_travel_time();
 	void perform_initial_sampling();
 
 	Agent* agent;
 	Map_Node* task;
 	int task_index;
 	World* world;
-	Distributed_MCTS* parent;
-	int last_update_index;
+	Distributed_MCTS* parent; // who is my parent?
+	int parent_index; // what node is my parent at?
+	double parent_time; // when is my parent done with their task?
+
+
+	int last_update_index; // When was the last time I updated my coordination
 	
 	double alpha; // gradient descent reward
 	int max_rollout_depth, max_search_depth; // how far do I search
@@ -70,7 +75,6 @@ private:
 	double travel_time; // time by astar path?
 	double work_time; // once there, how long to complete?
 	double completion_time; // time I actually finish and am ready to leave
-	double parent_time; // when should I calc travel time from
 	double raw_reward; // my reward at e_time/time?
 	double expected_reward; // my expected reward for completing task at e_time/time with e_dist/dist?
 	double down_branch_expected_reward; // my and all my best kids expected reward combined

@@ -5,6 +5,7 @@
 #include "World.h"
 #include "MCTS.h"
 #include "D_MCTS.h"
+#include "Distributed_MCTS.h"
 #include "Goal.h"
 #include "Pose.h"
 
@@ -21,7 +22,128 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 	this->last_planning_iter_end = -1;
 	this->initial_search_time = 2.0;//this->agent->plan_duration.toSec();
 	this->reoccuring_search_time = 0.95 * this->agent->plan_duration.toSec();
+	this->coord_update = 0;
 }
+
+void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
+	ROS_INFO("Agent_Planning::D_MCTS_task_selection: in 'D_MCTS_task_selection' on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+	double reward_in = 0.0;
+	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
+	std::vector<bool> task_list; // list of all tasks status, true if active, false if complete
+	std::vector<int> task_set; // list, by index, of all active tasks
+	this->world->get_task_status_list(task_list, task_set);
+	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: got task_list (%i) / task_set (%i)", int(task_list.size()), int(task_set.size()));
+	if (!this->dist_mcts) {
+		//ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: initializing dist_mcts");
+		this->dist_mcts = new Distributed_MCTS(this->world, this->world->get_nodes()[this->get_agent()->get_loc()], this->get_agent(), NULL, 0, this->coord_update);
+	}
+	this->coord_update++; // Make it a new planning iteration
+	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished initializing D_MCTS");
+
+	//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+	// task of root is marked complete
+	//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: set task index (%i) to false", this->dist_mcts->get_task_index());
+	
+	task_list[this->dist_mcts->get_task_index()] = false;
+	int depth_in = 0;
+	Distributed_MCTS* parent_of_none = NULL; // this gets set in Dist-MCTS Root
+	int rollout_depth = -1; // Indicate rollout has NOT started!
+	int planning_iter = 0;
+	while( planning_iter < 10){//double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
+		planning_iter++;
+		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+
+		this->dist_mcts->search(true, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
+		//if( planning_iter % 1000 == 0){
+		//this->dist_mcts->sample_tree(depth_in);
+		//}
+		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: out of search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+	}
+
+	ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished searching tree for %i inters", planning_iter);
+	this->cumulative_planning_iters += planning_iter;
+
+	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
+	this->dist_mcts->sample_tree(this->agent->get_coordinator(), depth_in);
+	//printf("sampling time: %0.2f \n", double(clock()) / double(CLOCKS_PER_SEC) - s_time);
+	std::vector<int> best_path;
+	std::vector<double> times;
+	std::vector<double> rewards;
+	this->dist_mcts->get_best_path(best_path, times, rewards);
+	
+	//std::vector<double> probs(int(best_path.size()), 1.0);
+	//this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
+	//ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
+
+	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
+	for(size_t i=0; i<best_path.size(); i++){
+		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
+	}
+	std::cout << std::endl;
+	
+	/*
+	std::ofstream outfile;
+	outfile.open("planning_time.txt", std::ios::app);
+	char buffer[50];
+	int n = sprintf_s(buffer, "%i, %0.6f\n", planning_iters, double(clock()) / double(CLOCKS_PER_SEC) - s_time);
+	outfile << buffer;
+	outfile.close();
+	*/
+
+	/*
+	ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s coord tree", this->agent->get_index());
+	this->agent->get_coordinator()->print_prob_actions();
+	for(int i=0; i<this->world->get_n_agents(); i++){
+		if(i != this->agent->get_index()){
+			ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
+			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
+		}
+	}
+	*/
+	
+	
+	//? - comeback to this after below: why does planning iter for agent 0 only do a few iters but for agent 1 it does 100s?
+
+	if(this->world->get_c_time() > this->initial_search_time){
+		if (this->agent->get_at_node()) {
+			// I am at either edge.x / edge.y
+			int max_kid_index = -1;
+			std::vector<std::string> args;
+			std::vector<double> vals;
+			//ROS_ERROR("Agent_Planning::D_MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+			if (this->dist_mcts->exploit_tree(max_kid_index, args, vals)) {
+				//std::cerr << "max_kid_index: " << max_kid_index << std::endl;
+				int goal_task_index = this->dist_mcts->get_kids()[max_kid_index]->get_task_index();
+				//ROS_INFO("Agent_Planning::D_MCTS_task_selection: exploit_tree succesful with max_kid_index %i and task index %i", max_kid_index, goal_task_index);
+				// only make a new goal if the current goai is NOT active
+				//ROS_INFO("Agent_Planning::D_MCTS_task_selection: checking if current goal (%i) is active, it is %i", this->agent->get_goal()->get_index(), this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active());
+				if(this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active() == 0){
+					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: goal is NOT active");
+					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: I am at node: %i/%i with A COMPLETED goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
+					this->set_goal(goal_task_index);
+					ROS_INFO("Agent_Planning::D_MCTS_task_selection: set new max_kid_index: %i", goal_task_index);
+					ROS_INFO("Agent_Planning::D_MCTS_task_selection: resetting dist_mcts root");
+					this->dist_mcts->prune_branches(max_kid_index);
+					ROS_INFO("Agent_Planning::D_MCTS_task_selection: pruned branches");
+					Distributed_MCTS* old = this->dist_mcts;
+					this->dist_mcts = this->dist_mcts->get_kids()[max_kid_index];
+					ROS_INFO("Agent_Planning::D_MCTS_task_selection: got_kids");
+					this->dist_mcts->set_as_root();
+					ROS_INFO("Agent_Planning::D_MCTS_task_selection: reset dist_mcts root");
+				}
+
+				if (!world->are_nbrs(this->agent->get_loc(), goal_task_index) ) {
+					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: not nbrs");
+					// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
+					this->dist_mcts->set_task_index(this->agent->get_edge().y);
+					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: set task index to %i", this->agent->get_edge().y);
+				}	
+			}
+		}
+	}
+	//ROS_WARN("Agent_Planning::D_MCTS_task_selection: edge out %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+}
+
 
 
 Agent_Planning::~Agent_Planning(){}
@@ -104,7 +226,8 @@ void Agent_Planning::plan() {
 	else if (this->task_selection_method.compare("mcts_task_by_completion_reward_gradient") == 0) {
 		this->world->set_mcts_reward_type("normal");
 		//ROS_INFO("Agent_Planning::plan: going into D_MCTS_task_by_completion_reward on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
-		this->D_MCTS_task_by_completion_reward();
+		//this->D_MCTS_task_by_completion_reward();
+		this->Distributed_MCTS_task_by_completion_reward();
 	}
 	// select task by MCTS using value at time of completion
 	else if (this->task_selection_method.compare("mcts_task_by_completion_value") == 0) {
