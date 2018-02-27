@@ -33,7 +33,6 @@ public:
 	void set_branch_probability(const double &bp) {this->branch_probability = bp; };
 	void set_cumulative_reward(const double &cr) {this->cumulative_reward = cr; };
 	void set_task_index(const int &ti) {this->task_index=ti; };
-	void reset_mcts_team_prob_actions();
 	void set_as_root() {this->raw_probability = 1.0; this->parent = NULL; };
 
 	// call from parent not self

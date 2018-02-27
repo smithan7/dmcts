@@ -113,8 +113,8 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->request_work_pub = nHandle.advertise<custom_messages::DMCTS_Request_Work>("/dmcts_master/request_work", 10);
 
 		// Timer Durations
-		this->plan_duration = ros::Duration(5.0);
-		this->act_duration = ros::Duration(10000.0);
+		this->plan_duration = ros::Duration(1.0);
+		this->act_duration = ros::Duration(1.0);
 		this->send_loc_duration = ros::Duration(1.0);
 		
 		this->task_list_timer_duration = ros::Duration(0.5); // How frequently do I check if I need to update the task list
@@ -230,7 +230,6 @@ void Agent::coordination_callback(const custom_messages::DMCTS_Coordination &msg
 	//ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->get_index(), msg.agent_index);
 	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
 	
-	this->planner->reset_mcts_team_prob_actions(); // this makes my tree re-check the probability
 	this->world->get_agents()[msg.agent_index]->upload_new_plan(msg.claimed_tasks, msg.claimed_time, msg.claimed_probability);
 	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
 	

@@ -20,7 +20,7 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 	this->task_selection_method = agent->get_task_selection_method();
 	this->planning_iter = 0;
 	this->last_planning_iter_end = -1;
-	this->initial_search_time = 2.0;//this->agent->plan_duration.toSec();
+	this->initial_search_time = 5.0;//this->agent->plan_duration.toSec();
 	this->reoccuring_search_time = 0.95 * this->agent->plan_duration.toSec();
 	this->coord_update = 0;
 }
@@ -55,9 +55,9 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 		//2-I am still not updating the path properly, not rebasing when reaching a new (non-goal) node
 		this->dist_mcts->search(true, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
-		//if( planning_iter % 1000 == 0){
-		//this->dist_mcts->sample_tree(depth_in);
-		//}
+		if( planning_iter % 1 == 0){
+			//this->dist_mcts->sample_tree(depth_in);
+		}
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: out of search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 	}
 
@@ -74,19 +74,20 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 
 	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
 	for(size_t i=0; i<best_path.size(); i++){
-		std::cout << std::fixed << std::setprecision(2) << best_path[i] << ", ";
+		//std::cout << std::fixed << std::setprecision(2) << best_path[i] << ", ";
+		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
 	}
 	std::cout << std::endl;
 	
 
 	
-	std::vector<double> probs(int(best_path.size()), 1.0);
-	this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
-	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
-	for(size_t i=0; i<best_path.size(); i++){
-		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
-	}
-	std::cout << std::endl;
+	//std::vector<double> probs(int(best_path.size()), 1.0);
+	//this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
+	//std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
+	//for(size_t i=0; i<best_path.size(); i++){
+	//	std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
+	//}
+	//std::cout << std::endl;
 	
 	/*
 	std::ofstream outfile;
@@ -638,12 +639,6 @@ void Agent_Planning::MCTS_task_by_completion_value_impact() {
 	this->MCTS_task_selection();
 	//ROS_INFO("Agent_Planning::MCTS_task_by_completion_value_impact: out of 'MCTS_task_selection'");
 	//std::cout << "mcts_by_comp_value::planning_time: " << double(clock()) / double(CLOCKS_PER_SEC) - s_time << std::endl;
-}
-
-void Agent_Planning::reset_mcts_team_prob_actions(){
-	if(this->mcts){
-		this->mcts->reset_mcts_team_prob_actions();
-	}
 }
 
 void Agent_Planning::MCTS_task_selection(){

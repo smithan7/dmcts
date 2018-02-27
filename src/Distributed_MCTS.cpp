@@ -40,10 +40,10 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	this->max_search_depth = std::min(this->world->get_n_active_tasks(), 10); 
 
 	// sampling stuff
-	this->alpha = 0.1; // Gradient ascent rate for coordination / learning rate on probable actions
+	this->alpha = 1.0; // Gradient ascent rate for coordination / learning rate on probable actions
 	this->raw_probability = 0.0; // How likely am I to be selected compared to siblings?
 	this->branch_probability = 0.0; // How likely am I to be selected accounting for parent
-	this->min_sampling_probability_threshold = 0.000001; // How far down the tree will I search?
+	this->min_sampling_probability_threshold = 0.1; // How far down the tree will I search?
 
 	// D-UCB Stuff
 	this->cumulative_reward = 0.0; // what is the total cumulative reward across all historical pulls
@@ -360,19 +360,26 @@ void Distributed_MCTS::sample_tree(Agent_Coordinator* coord_in, int &depth, cons
 	if(depth == 0){
 		// I am the root, reset probable actions
 		coord_in->reset_prob_actions();
+		this->branch_probability = 1.0;
 	}
 
 	this->check_completion_time(depth, update_index);
 
 	// add stop to coordinator
+	//ROS_INFO("Distributed_MCTS::sample_tree: [%i]", this->task_index);
 	coord_in->add_stop_to_my_path(this->task_index, this->completion_time, this->branch_probability);
 	if(depth > this->max_search_depth){
+		//ROS_INFO("Distributed_MCTS::sample_tree: returning because depth %i is greater than max depth %i", depth, this->max_search_depth);
 		// Too deep, don't continue sampling
 		return;
+	}
+	else{		
+	    depth++;
 	}
    
     // only continue if I have kids
     if(this->kids.size() == 0){
+    	//ROS_INFO("Distributed_MCTS::sample_tree: returning becasue kids=0");
     	return;
     }
 
@@ -385,7 +392,7 @@ void Distributed_MCTS::sample_tree(Agent_Coordinator* coord_in, int &depth, cons
             maxI = i;
         }
     }
-    
+    //ROS_INFO("Distributed_MCTS::sample_tree:maxR %0.2f and maxI %i", maxR, maxI);
     double sumPP = 0.0;
     for(size_t i=0; i<this->kids.size(); i++){
         if(i == maxI){
@@ -396,11 +403,14 @@ void Distributed_MCTS::sample_tree(Agent_Coordinator* coord_in, int &depth, cons
         }
         sumPP = sumPP+ this->kids[i]->raw_probability;
     }
+    //ROS_INFO("Distributed_MCTS::sample_tree:sumPP: %0.2f", sumPP);
     
-    depth++;
     for(size_t i=0; i<this->kids.size(); i++){
        this->kids[i]->raw_probability = this->kids[i]->raw_probability/sumPP;  // normalize
+       //ROS_INFO("Distributed_MCTS::sample_tree:kids[%i] raw_probability %0.2f", int(i), this->kids[i]->raw_probability);
        this->kids[i]->branch_probability = this->branch_probability * this->kids[i]->raw_probability;
+       //ROS_INFO("Distributed_MCTS::sample_tree:branch_probability %0.2f", this->branch_probability);
+       //ROS_INFO("Distributed_MCTS::sample_tree: kids[%i] branch_probability %0.2f and min_sampling_probability_threshold %0.2f", int(i), this->kids[i]->branch_probability, this->min_sampling_probability_threshold);
        if (this->kids[i]->branch_probability > this->min_sampling_probability_threshold){
            this->kids[i]->sample_tree(coord_in, depth, update_index);
        }
@@ -409,6 +419,11 @@ void Distributed_MCTS::sample_tree(Agent_Coordinator* coord_in, int &depth, cons
 
 void Distributed_MCTS::sample_tree(int &depth){
 	// Sample the tree and update probable actions
+		if(depth == 0){
+		// I am the root, reset probable actions
+		this->branch_probability = 1.0;
+	}
+
 	if(depth > this->max_search_depth){
 		// Too deep, don't continue sampling
 		return;

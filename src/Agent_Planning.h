@@ -16,7 +16,6 @@ public:
 	Agent_Planning(Agent* agent, World* world);
 	~Agent_Planning();
 	void plan(); // select a new goal, called at every node
-	void reset_mcts_team_prob_actions();
 	Agent* get_agent() { return this->agent; };
 
 private:
