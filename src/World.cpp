@@ -57,7 +57,7 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	// time stuff
 	this->c_time = 0.0;
 	this->dt = 1.0;
-	this->end_time = 10000.0;
+	this->end_time = 100000.0;
 
 	// map and PRM stuff
 	this->map_height = 100.0; 

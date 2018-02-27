@@ -34,14 +34,14 @@ public:
 	void set_cumulative_reward(const double &cr) {this->cumulative_reward = cr; };
 	void set_task_index(const int &ti) {this->task_index=ti; };
 	void reset_mcts_team_prob_actions();
-	void set_as_root() {this->raw_probability = 1.0; };
+	void set_as_root() {this->raw_probability = 1.0; this->parent = NULL; };
 
 	// call from parent not self
-	void search(const bool &am_root, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int &rollout_depth, const int &update_index);
-	void sample_tree(Agent_Coordinator* coord_in, int &depth);
+	void search(const bool &am_root, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int rollout_depth, const int &update_index);
+	void sample_tree(Agent_Coordinator* coord_in, int &depth, const int &update_index);
 	void sample_tree(int &depth);
-	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals);
-	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards);
+	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals, int depth, const int &update_index);
+	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards, int depth, const int &update_index);
 
 	// get rid of old parts of tree
 	void prune_branches(const int &max_child);
@@ -51,6 +51,8 @@ private:
 	// rollout does not create new nodes
 	bool make_kids(const std::vector<bool> &task_status, const std::vector<int> &task_set, const int &update_index);
 	bool ucb(Distributed_MCTS* &gc);
+	void check_completion_time(const int &depth, const int &update_index); // Check that I will complete this task at the advertised time
+
 	// update line for private
 	void update_down_branch_expected_reward(Distributed_MCTS* &gc); // update my branch reward, min, max, and sum
 	void update_down_branch_expected_reward(); // update my branch reward, min, max, and sum

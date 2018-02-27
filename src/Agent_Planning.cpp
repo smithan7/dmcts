@@ -26,7 +26,7 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 }
 
 void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
-	ROS_INFO("Agent_Planning::D_MCTS_task_selection: in 'D_MCTS_task_selection' on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+	ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: in 'Distributed_MCTS_task_by_completion_reward' on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 	double reward_in = 0.0;
 	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
 	std::vector<bool> task_list; // list of all tasks status, true if active, false if complete
@@ -49,11 +49,11 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	Distributed_MCTS* parent_of_none = NULL; // this gets set in Dist-MCTS Root
 	int rollout_depth = -1; // Indicate rollout has NOT started!
 	int planning_iter = 0;
-	while( planning_iter < 1){//double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
+	ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: Have dist_mcts root: %i",this->dist_mcts->get_task_index());
+	while( double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
 		planning_iter++;
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
-		1-Follow the search down, claimed tasks are being reclaimed
-		2-I am still not updating the path properly
+		//2-I am still not updating the path properly, not rebasing when reaching a new (non-goal) node
 		this->dist_mcts->search(true, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
 		//if( planning_iter % 1000 == 0){
 		//this->dist_mcts->sample_tree(depth_in);
@@ -65,17 +65,23 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	this->cumulative_planning_iters += planning_iter;
 
 	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
-	this->dist_mcts->sample_tree(this->agent->get_coordinator(), depth_in);
+	this->dist_mcts->sample_tree(this->agent->get_coordinator(), depth_in, coord_update);
 	//printf("sampling time: %0.2f \n", double(clock()) / double(CLOCKS_PER_SEC) - s_time);
 	std::vector<int> best_path;
 	std::vector<double> times;
 	std::vector<double> rewards;
-	this->dist_mcts->get_best_path(best_path, times, rewards);
-	
-	//std::vector<double> probs(int(best_path.size()), 1.0);
-	//this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
-	//ROS_WARN("Agent_Planning: planning_iter %i and this iters: %i", this->planning_iter, planning_iters);
+	this->dist_mcts->get_best_path(best_path, times, rewards, depth_in, coord_update);
 
+	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
+	for(size_t i=0; i<best_path.size(); i++){
+		std::cout << std::fixed << std::setprecision(2) << best_path[i] << ", ";
+	}
+	std::cout << std::endl;
+	
+
+	
+	std::vector<double> probs(int(best_path.size()), 1.0);
+	this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
 	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
 	for(size_t i=0; i<best_path.size(); i++){
 		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
@@ -91,7 +97,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	outfile.close();
 	*/
 
-	/*
+	
 	ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s coord tree", this->agent->get_index());
 	this->agent->get_coordinator()->print_prob_actions();
 	for(int i=0; i<this->world->get_n_agents(); i++){
@@ -100,45 +106,117 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
 		}
 	}
-	*/
 	
+	if(this->world->get_c_time() > this->initial_search_time && this->agent->get_at_node()){ // Don't explot path / settle on waht to do until I've had a few seconds to think and I am at a node
+		// I am at either edge.x / edge.y
+		int max_kid_index = -1;
+		std::vector<std::string> args;
+		std::vector<double> vals;
+		//ROS_ERROR("Agent_Planning::D_MCTS_task_selection: I am at a node and I am on edge: %i/%i with goal: %i and mcts root %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index(), this->dist_mcts->get_task_index());
+		if (this->dist_mcts->exploit_tree(max_kid_index, args, vals, depth_in, coord_update)) {
+			int goal_task_index = this->dist_mcts->get_kids()[max_kid_index]->get_task_index();
+			//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: exploit_tree succesful with max_kid_index %i and task index %i", max_kid_index, goal_task_index);
+			// only make a new goal if the current goai is NOT active
+			//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: checking if current goal (%i) is active, it is %i", this->agent->get_goal()->get_index(), this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active());
 	
-	//? - comeback to this after below: why does planning iter for agent 0 only do a few iters but for agent 1 it does 100s?
-
-	if(this->world->get_c_time() > this->initial_search_time){
-		if (this->agent->get_at_node()) {
-			// I am at either edge.x / edge.y
-			int max_kid_index = -1;
-			std::vector<std::string> args;
-			std::vector<double> vals;
-			//ROS_ERROR("Agent_Planning::D_MCTS_task_selection: I am at node: %i/%i with goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
-			if (this->dist_mcts->exploit_tree(max_kid_index, args, vals)) {
-				//std::cerr << "max_kid_index: " << max_kid_index << std::endl;
-				int goal_task_index = this->dist_mcts->get_kids()[max_kid_index]->get_task_index();
-				//ROS_INFO("Agent_Planning::D_MCTS_task_selection: exploit_tree succesful with max_kid_index %i and task index %i", max_kid_index, goal_task_index);
-				// only make a new goal if the current goai is NOT active
-				//ROS_INFO("Agent_Planning::D_MCTS_task_selection: checking if current goal (%i) is active, it is %i", this->agent->get_goal()->get_index(), this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active());
-				if(this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active() == 0){
-					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: goal is NOT active");
-					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: I am at node: %i/%i with A COMPLETED goal: %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index());
-					this->set_goal(goal_task_index);
-					ROS_INFO("Agent_Planning::D_MCTS_task_selection: set new max_kid_index: %i", goal_task_index);
-					ROS_INFO("Agent_Planning::D_MCTS_task_selection: resetting dist_mcts root");
-					this->dist_mcts->prune_branches(max_kid_index);
-					ROS_INFO("Agent_Planning::D_MCTS_task_selection: pruned branches");
-					Distributed_MCTS* old = this->dist_mcts;
-					this->dist_mcts = this->dist_mcts->get_kids()[max_kid_index];
-					ROS_INFO("Agent_Planning::D_MCTS_task_selection: got_kids");
-					this->dist_mcts->set_as_root();
-					ROS_INFO("Agent_Planning::D_MCTS_task_selection: reset dist_mcts root");
+			if(this->world->get_nodes()[this->agent->get_goal()->get_index()]->is_active()){
+				// My current goal is still active, check if I am at my goal
+				if(this->agent->get_edge().x == this->agent->get_goal()->get_index()){
+					// I am still at my goal and it is not complete, continue
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: I am at my goal %i and it is not complete, returning", this->agent->get_goal()->get_index());
+					return;
 				}
+				else{
+					// I am NOT at my goal and it is still active
+					// THis is where I allow the agent to change goals
+					// My goal is not active, set my new goal
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: I am at node: %i/%i with an active old goal: %i, setting new goal %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index(), goal_task_index);
+					if(this->dist_mcts->get_task_index() == this->agent->get_goal()->get_index()){
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: Goal == Dist-MCTS root, returning");
+						return;
+					}
+					// Am I nbrs with my goal task
+					if (world->are_nbrs(this->agent->get_loc(), goal_task_index) ) {
+						// I am nbrs with my goal task, assign it as my goal
 
-				if (!world->are_nbrs(this->agent->get_loc(), goal_task_index) ) {
-					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: not nbrs");
+						this->set_goal(goal_task_index);
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: %i is nbrs with %i", this->agent->get_edge().x, goal_task_index);
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: pruning dist_mcts branches except max_kid_index: %i", goal_task_index);
+						this->dist_mcts->prune_branches(max_kid_index);
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: pruned branches and now have kids: %i", int(this->dist_mcts->get_kids().size()));
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: resetting dist_mcts root to %i", goal_task_index);
+						Distributed_MCTS* old = this->dist_mcts;
+						this->dist_mcts = this->dist_mcts->get_kids()[max_kid_index];
+						//delete old;
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: dist_mcts has task_index %i and %i kids", this->dist_mcts->get_task_index(), int(this->dist_mcts->get_kids().size()));
+						this->dist_mcts->set_as_root();
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: reset dist_mcts root");
+					}
+					else{
+						// I am not nbrs with my goal task, assign a temporary task to dist-mcts root and assign goal to robot
+						std::vector<int> path;
+						this->set_goal(this->agent->get_goal()->get_index(), path);
+						/*** if i am switching to a temporary task, rebase the root as myself, however, do not prune kids. ***/			
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: %i is NOT nbrs with %i", this->agent->get_edge().x, goal_task_index);
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: set new max_kid_index: %i", goal_task_index);
+						
+						// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
+						this->dist_mcts->prune_branches(max_kid_index);
+						//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: got path");
+						//std::cout << "    ";
+						//for(size_t i=0; i<path.size(); i++){
+						//	std::cout << path[i] << ",";
+						//}
+						//std::cout << std::endl;
+						if(path.size()>2){
+							this->dist_mcts->set_task_index(path[1]);
+							//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: set task index to %i", path[1]);
+						}
+					}
+				}
+			}
+			else{
+				// My goal is not active, set my new goal
+				//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: I am at node: %i/%i with A COMPLETED old goal: %i, setting new goal %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index(), goal_task_index);
+				
+	
+				// Am I nbrs with my goal task
+				if (world->are_nbrs(this->agent->get_loc(), goal_task_index) ) {
+					// I am nbrs with my goal task, assign it as my goal
+					this->set_goal(goal_task_index);
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: %i is nbrs with %i", this->agent->get_edge().x, goal_task_index);
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: pruning dist_mcts branches except max_kid_index: %i", goal_task_index);
+					this->dist_mcts->prune_branches(max_kid_index);
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: pruned branches and now have kids: %i", int(this->dist_mcts->get_kids().size()));
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: resetting dist_mcts root to %i", goal_task_index);
+					Distributed_MCTS* old = this->dist_mcts;
+					this->dist_mcts = this->dist_mcts->get_kids()[0];
+					//delete old;
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: dist_mcts has task_index %i and %i kids", this->dist_mcts->get_task_index(), int(this->dist_mcts->get_kids().size()));
+					this->dist_mcts->set_as_root();
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: reset dist_mcts root");
+				}
+				else{
+					// I am not nbrs with my goal task, assign a temporary task
+					std::vector<int> path;
+					this->set_goal(goal_task_index, path);
+					/*** if i am switching to a temporary task, rebase the root as myself, however, do not prune kids. ***/			
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: %i is NOT nbrs with %i", this->agent->get_edge().x, goal_task_index);
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: set new max_kid_index: %i", goal_task_index);
+					
 					// I am not nbrs with the next node (my goal), replace root index with current node but don't advance/prune tree
-					this->dist_mcts->set_task_index(this->agent->get_edge().y);
-					//ROS_INFO("Agent_Planning::D_MCTS_task_selection: set task index to %i", this->agent->get_edge().y);
-				}	
+					this->dist_mcts->prune_branches(max_kid_index);
+					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: got path");
+					std::cout << "    ";
+					for(size_t i=0; i<path.size(); i++){
+						std::cout << path[i] << ",";
+					}
+					std::cout << std::endl;
+					if(path.size()>2){
+						this->dist_mcts->set_task_index(path[1]);
+					//	ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: set task index to %i", path[1]);
+					}
+				}
 			}
 		}
 	}
@@ -685,14 +763,46 @@ void Agent_Planning::MCTS_task_selection(){
 				}	
 			}
 		}
-}
+	}
 }
 
-void Agent_Planning::set_goal(int goal_index) {
+void Agent_Planning::set_goal(const int &goal_index) {
 	// create a new goal from scratch, reset everything!
-	ROS_INFO("Agent_Planning::set_goal: goal_index: %i", goal_index);
+	//ROS_INFO("Agent_Planning::set_goal: goal_index: %i from cLoc: %i", goal_index, this->agent->get_edge().x);
 	this->agent->get_goal()->set_index(goal_index);
 	std::vector<int> path;
+	double length = 0.0;
+	bool need_path = true;
+	if (world->a_star(this->agent->get_edge().x, this->agent->get_goal()->get_index(), this->agent->get_pay_obstacle_cost(), need_path, path, length)) {
+		this->agent->get_goal()->set_distance(length);
+		this->agent->get_goal()->set_path(path);
+		//std::cout << "Agent_Planning::set_goal::Path to goal: ";
+		//for(size_t i=0; i<path.size(); i++){
+		//	std::cout << path[i] << ", ";
+		//}
+		//std::cout << std::endl;
+	}
+	else {
+		this->agent->get_goal()->set_distance(double(INFINITY));
+		ROS_WARN("Agent_Planning:set_goal: A* could not find path to node");
+	}
+	this->agent->get_goal()->set_current_time(world->get_c_time());
+	double travel_time = this->agent->get_goal()->get_distance() / (this->agent->get_travel_vel()*world->get_dt());
+	double arrival_time = this->agent->get_goal()->get_current_time() + travel_time;
+	this->agent->get_goal()->set_arrival_time(arrival_time);
+	double work_time = this->world->get_nodes()[goal_index]->get_time_to_complete(this->agent, this->world);
+	this->agent->get_goal()->set_completion_time(world->get_c_time() + this->agent->get_goal()->get_arrival_time() + work_time);
+	this->agent->get_goal()->set_current_reward(world->get_nodes()[goal_index]->get_reward_at_time(this->agent->get_goal()->get_current_time()));
+	this->agent->get_goal()->set_arrival_reward(world->get_nodes()[goal_index]->get_reward_at_time(this->agent->get_goal()->get_arrival_time()));
+	this->agent->get_goal()->set_completion_reward(world->get_nodes()[goal_index]->get_reward_at_time(this->agent->get_goal()->get_completion_time()));
+}
+
+
+void Agent_Planning::set_goal(const int &goal_index, std::vector<int> &path) {
+	// create a new goal from scratch, reset everything!
+	ROS_INFO("Agent_Planning::set_goal: goal_index: %i from cLoc: %i", goal_index, this->agent->get_edge().x);
+	this->agent->get_goal()->set_index(goal_index);
+	path.clear();
 	double length = 0.0;
 	bool need_path = true;
 	if (world->a_star(this->agent->get_edge().x, this->agent->get_goal()->get_index(), this->agent->get_pay_obstacle_cost(), need_path, path, length)) {
@@ -719,7 +829,7 @@ void Agent_Planning::set_goal(int goal_index) {
 	this->agent->get_goal()->set_completion_reward(world->get_nodes()[goal_index]->get_reward_at_time(this->agent->get_goal()->get_completion_time()));
 }
 
-void Agent_Planning::set_goal(int goal_index, const std::vector<std::string> args, const std::vector<double> vals) {
+void Agent_Planning::set_goal(const int &goal_index, const std::vector<std::string> &args, const std::vector<double> &vals) {
 	
 	bool need_distance = true;
 	bool need_current_reward = true;

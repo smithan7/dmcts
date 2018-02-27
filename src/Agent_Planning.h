@@ -31,8 +31,9 @@ private:
 	int planning_iter, last_planning_iter_end, cumulative_planning_iters;
 	double initial_search_time, reoccuring_search_time;
 
-	void set_goal(int goal_index);
-	void set_goal(int goal_index, const std::vector<std::string> args, const std::vector<double> vals);
+	void set_goal(const int &goal_index);
+	void set_goal(const int &goal_index, std::vector<int> &path);
+	void set_goal(const int &goal_index, const std::vector<std::string> &args, const std::vector<double> &vals);
 	// greedy by time
 	void select_greedy_task_by_arrival_time();
 	void select_greedy_task_by_completion_time();
