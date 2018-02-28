@@ -113,7 +113,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->request_work_pub = nHandle.advertise<custom_messages::DMCTS_Request_Work>("/dmcts_master/request_work", 10);
 
 		// Timer Durations
-		this->plan_duration = ros::Duration(1.0);
+		this->plan_duration = ros::Duration(0.1);
 		this->act_duration = ros::Duration(1.0);
 		this->send_loc_duration = ros::Duration(1.0);
 		
@@ -293,6 +293,7 @@ void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
 	msg.edge_x = this->edge.x;
 	msg.edge_y = this->edge.y;
 	msg.status = int8_t(this->run_status);
+	msg.path = this->get_path();
 
 	this->loc_pub.publish(msg);
 }

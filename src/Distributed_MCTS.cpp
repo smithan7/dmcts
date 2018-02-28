@@ -37,7 +37,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	this->down_branch_expected_reward = 0.0; // the expected reward for my best kids and their kids (recursive to max depth)
 	this->number_pulls = 0; // how many times have I been pulled
 	this->max_rollout_depth = 0; //edit these to ensure tree can grow on simple case
-	this->max_search_depth = std::min(this->world->get_n_active_tasks(), 10); 
+	this->max_search_depth = 6;//std::min(this->world->get_n_active_tasks(), 100); 
 
 	// sampling stuff
 	this->alpha = 1.0; // Gradient ascent rate for coordination / learning rate on probable actions
@@ -515,7 +515,7 @@ void Distributed_MCTS::get_best_path(std::vector<int> &path, std::vector<double>
 	rewards.push_back(this->expected_reward);
 	if(this->kids.size() > 0){
 		int maxI = -1;
-		double maxV = -INFINITY;
+		double maxV = 0.01;
 		for(size_t i=0; i<this->kids.size(); i++){
 		//	ROS_INFO("Distributed_MCTS::get_best_path:: kid[%i] has task index %i and branch reward %0.1f", int(i), this->kids[i]->get_task_index(), this->kids[i]->get_down_branch_expected_reward());
 			if(this->kids[i]->get_down_branch_expected_reward() > maxV){

@@ -78,6 +78,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
 	}
 	std::cout << std::endl;
+	this->agent->set_path(best_path);
 	
 
 	
