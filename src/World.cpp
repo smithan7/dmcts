@@ -141,6 +141,27 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->initialized = true;
 }
 
+double World::get_task_reward_at_time(Agent_Coordinator* coord, const int &task_index, const double &time, const bool &use_impact){
+	if(use_impact){
+		
+		std::vector<double> probs;
+		std::vector<double> times;
+		coord->get_claims_after(task_index, time, probs, times);
+		double raw_reward = this->nodes[task_index]->get_reward_at_time(time);
+		double post_reward = 0.0;
+		for(size_t i=0; i<times.size(); i++){
+			if(times[i] > time){
+				post_reward += (1.0 - probs[i]) * std::max(this->nodes[task_index]->get_reward_at_time(time), 0.0);
+			}
+		}
+		double impact = std::max(0.0, raw_reward - post_reward);
+		return impact;
+	}
+	else{
+		return this->nodes[task_index]->get_reward_at_time(time);
+	}
+}
+
 void World::make_obs_mat(){
 	this->Obs_Mat = cv::Mat::zeros(this->map_width, this->map_height, CV_8UC1);
 	this->obstacles.clear();

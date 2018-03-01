@@ -10,6 +10,7 @@
 class Map_Node;
 class Agent;
 class Task;
+class Agent_Coordinator;
 
 class World
 {
@@ -53,6 +54,7 @@ public:
 	double get_min_task_time(const int &tt){ return this->min_task_times[tt]; };
 	double get_max_task_work(const int &tt){ return this->max_task_works[tt]; };
 	double get_min_task_work(const int &tt){ return this->min_task_works[tt]; };
+	double get_task_reward_at_time(Agent_Coordinator* coord, const int &task_index, const double &time, const bool &use_impact);
 
 	// utility functions
 	bool a_star(const int & start, const int & goal, const bool &pay_obstacle_cost, const bool &need_path, std::vector<int>& path, double & length);

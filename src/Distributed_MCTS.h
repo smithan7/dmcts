@@ -36,15 +36,16 @@ public:
 	void set_as_root() {this->raw_probability = 1.0; this->parent = NULL; };
 
 	// call from parent not self
-	void search(const bool &am_root, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int rollout_depth, const int &update_index);
+	void search(const int &max_search_depth_in, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int rollout_depth, const int &update_index);
 	void sample_tree(Agent_Coordinator* coord_in, int &depth, const int &update_index);
 	void sample_tree(int &depth);
 	bool exploit_tree(int &goal_index, std::vector<std::string> &args, std::vector<double> &vals, int depth, const int &update_index);
 	void get_best_path(std::vector<int> &path, std::vector<double> &times, std::vector<double> &rewards, int depth, const int &update_index);
 
 	// get rid of old parts of tree
-	void prune_branches(const int &max_child);
+	void prune_branches(const int &max_child); // get rid of all kids except my best
 	void burn_branches(); // don't save any kids, burn it all
+	void clean_null_branches(int depth); // Get rid of all branches containing null tasks
 
 private:
 	// rollout does not create new nodes
@@ -67,6 +68,8 @@ private:
 	Distributed_MCTS* parent; // who is my parent?
 	int parent_index; // what node is my parent at?
 	double parent_time; // when is my parent done with their task?
+
+	bool use_impact; // am I strictly reward or do I use impact?
 
 
 	int last_update_index; // When was the last time I updated my coordination

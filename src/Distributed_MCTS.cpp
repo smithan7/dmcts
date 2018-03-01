@@ -15,6 +15,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	this->task = task_in; // which task am I?
 	this->task_index = task_in->get_index(); // whats my index?
 	this->world = world; // world
+	this->use_impact = true;
 	
 
 	this->last_update_index = update_index; // when was the last time my coordination info was updated
@@ -37,10 +38,10 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	this->down_branch_expected_reward = 0.0; // the expected reward for my best kids and their kids (recursive to max depth)
 	this->number_pulls = 0; // how many times have I been pulled
 	this->max_rollout_depth = 0; //edit these to ensure tree can grow on simple case
-	this->max_search_depth = 6;//std::min(this->world->get_n_active_tasks(), 100); 
+	this->max_search_depth = this->world->get_n_active_tasks(); 
 
 	// sampling stuff
-	this->alpha = 1.0; // Gradient ascent rate for coordination / learning rate on probable actions
+	this->alpha = 0.1; // Gradient ascent rate for coordination / learning rate on probable actions
 	this->raw_probability = 0.0; // How likely am I to be selected compared to siblings?
 	this->branch_probability = 0.0; // How likely am I to be selected accounting for parent
 	this->min_sampling_probability_threshold = 0.1; // How far down the tree will I search?
@@ -49,7 +50,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	this->cumulative_reward = 0.0; // what is the total cumulative reward across all historical pulls
 	this->mean_reward = 0.0; // cumulative reward / number_pulls
 	this->gamma = 0.99; // How long of a memory should I keep?
-	this->epsilon = 1.41; // UCB weight term for parent number_pulls
+	this->epsilon = 0.5; // UCB weight term for parent number_pulls
 	this->beta = 1.41; // explore vs exploit
 
 	this->kids.clear();
@@ -71,7 +72,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: travel time complete");
 			this->completion_time = this->parent_time + this->travel_time + this->work_time;
 			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: completion time complete");
-			this->raw_reward = this->task->get_reward_at_time(this->completion_time);
+			this->raw_reward = this->world->get_task_reward_at_time(this->agent->get_coordinator(), this->task_index, this->completion_time, this->use_impact);
 			//ROS_INFO("Distributed_MCTS::Distributed_MCTS: got raw_reward: %0.2f", this->raw_reward);
 			this->update_probability_task_is_available();
 			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: got probability_task_available: %0.2f", this->probability_task_available);
@@ -95,7 +96,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 			this->agent->get_travel_time(this->task_index, this->travel_time);
 			this->work_time = task_in->get_time_to_complete(this->agent, world);
 			this->completion_time = this->parent_time + this->travel_time + this->work_time;
-			this->raw_reward = this->task->get_reward_at_time(this->completion_time);
+			this->raw_reward = this->world->get_task_reward_at_time(this->agent->get_coordinator(), this->task_index, this->completion_time, this->use_impact);
 			//ROS_INFO("Distributed_MCTS::Distributed_MCTS: got raw_reward: %0.2f", this->raw_reward);
 			this->update_probability_task_is_available();
 			//ROS_WARN("Distributed_MCTS::Distributed_MCTS: got probability_task_available: %0.2f", this->probability_task_available);
@@ -116,6 +117,26 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	}
 }
 
+void Distributed_MCTS::clean_null_branches(int depth){
+	depth++;
+	if(this->branch_probability > this->min_sampling_probability_threshold && depth < this->max_search_depth){
+		ROS_INFO("Distributed_MCTS::clean_null_branches: checking task %i", this->task_index);
+		int i = 0;
+		while(i < this->kids.size()){
+			if(this->world->get_task_status(this->kids[i]->get_task_index())){
+				ROS_INFO("Distributed_MCTS::clean_null_branches: keeping task %i", this->kids[i]->get_task_index());
+				i++;
+				this->kids[i]->clean_null_branches(depth);
+			}
+			else{
+				ROS_INFO("Distributed_MCTS::clean_null_branches: burning task %i ***************************", this->kids[i]->get_task_index());
+				this->kids[i]->burn_branches();
+				delete this->kids[i];
+				this->kids.erase(this->kids.begin() + i);
+			}
+		}
+	}	
+}
 
 Distributed_MCTS::~Distributed_MCTS(){
 	// DO NOT BURN BRANCHES!!! This is taken care of in Agent Planning destructor and will cause a double delete when called as it is already handled in burn branches, recalling just does it twice (which gives an error)
@@ -139,8 +160,6 @@ bool Distributed_MCTS::make_kids( const std::vector<bool> &task_status, const st
 			kids_made = true;
 		}
 	}
-
-
 
 	if(kids_made){
 		this->update_down_branch_expected_reward();
@@ -202,7 +221,7 @@ bool Distributed_MCTS::ucb(Distributed_MCTS* &gc){
     return true;
 }
 
-void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int rollout_depth, const int &update_index) {
+void Distributed_MCTS::search(const int &max_search_depth_in, int depth_in, Distributed_MCTS* parent, std::vector<bool> &task_status, std::vector<int> &task_set, int rollout_depth, const int &update_index) {
 	//ROS_ERROR("into search at depth: %i", depth_in);
 	//ROS_INFO("Distributed_MCTS::Search: Searching: %i at depth %i and time %0.2f", this->task_index, depth_in, this->completion_time);
 	this->number_pulls++;
@@ -216,6 +235,8 @@ void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCT
 		ROS_ERROR("Parent Error %i at depth %i", this->task_index, depth_in);
 	}
 
+	this->max_search_depth = max_search_depth_in;
+	
 	depth_in++;
 	
 	if(rollout_depth >= 0){
@@ -223,7 +244,7 @@ void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCT
 		rollout_depth++;
 	}
 
-	if (!am_root && (depth_in > this->max_search_depth || parent->get_completion_time() > this->world->get_end_time() || rollout_depth > this->max_rollout_depth)) {
+	if (this->parent && (depth_in > this->max_search_depth || parent->get_completion_time() > this->world->get_end_time() || rollout_depth > this->max_rollout_depth)) {
 		return;
 	}
 	//ROS_ERROR("into search: going into check_completion_time");
@@ -239,7 +260,7 @@ void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCT
 
 	//ROS_ERROR("into search: checking for kids");
 	// If I don't have kids, make some and roll them out
-	if (this->kids.size() == 0) {
+	if (this->kids.size() == 0 && depth_in + 1 < this->max_search_depth ) {
 		rollout_depth = std::max(0,rollout_depth); // If first time making kids then start rollout counter, if not then continue incrementing
 		if (!this->make_kids(task_status, task_set, update_index)) {
 			//ROS_WARN("Distributed_MCTS::search: Failed to make kids");
@@ -254,7 +275,7 @@ void Distributed_MCTS::search(const bool &am_root, int depth_in, Distributed_MCT
 		if (this->ucb(gc)) {
 			// search the kid's branch 
 			task_status[gc->get_task_index()] = false; // simulate completing the task
-			gc->search(false, depth_in, this, task_status, task_set, rollout_depth, update_index);
+			gc->search(max_search_depth_in, depth_in, this, task_status, task_set, rollout_depth, update_index);
 			task_status[gc->get_task_index()] = true; // mark the task incomplete, undo simulation
 
 			// do something with the reward
@@ -475,7 +496,7 @@ void Distributed_MCTS::update_my_travel_time(){
 		//ROS_WARN("Distributed_MCTS::Distributed_MCTS: travel time complete");
 		this->completion_time = this->parent_time + this->travel_time + this->work_time;
 		//ROS_WARN("Distributed_MCTS::Distributed_MCTS: completion time complete");
-		this->raw_reward = this->task->get_reward_at_time(this->completion_time);
+		this->raw_reward = this->world->get_task_reward_at_time(this->agent->get_coordinator(), this->task_index, this->completion_time, this->use_impact);
 		this->update_probability_task_is_available();
 		//ROS_WARN("Distributed_MCTS::Distributed_MCTS: got probability");
 		this->expected_reward = this->raw_reward * (1.0 - this->probability_task_available);
@@ -492,7 +513,7 @@ void Distributed_MCTS::update_my_travel_time(){
 void Distributed_MCTS::update_my_completion_time(){
 	// new arrival time, already know distance, get reward and the update 
 	this->completion_time = this->parent_time + this->work_time + this->travel_time;
-	this->raw_reward = this->task->get_reward_at_time(this->completion_time);
+	this->raw_reward = this->world->get_task_reward_at_time(this->agent->get_coordinator(), this->task_index, this->completion_time, this->use_impact);
 	this->update_probability_task_is_available();
 }
 
@@ -510,9 +531,11 @@ void Distributed_MCTS::get_best_path(std::vector<int> &path, std::vector<double>
 	this->check_completion_time(depth, update_index);
 
 	//ROS_INFO("Distributed_MCTS::get_best_path at node: %i: with parent_time / travel_time / work_time / completion_time: %0.2f / %0.2f / %0.2f / %0.2f", this->task_index, this->parent_time, this->travel_time, this->work_time, this->completion_time);
-	path.push_back(this->task_index);
-	times.push_back(this->completion_time);
-	rewards.push_back(this->expected_reward);
+	if(this->world->get_task_status(this->task_index)){
+		path.push_back(this->task_index);
+		times.push_back(this->completion_time);
+		rewards.push_back(this->expected_reward);
+	}
 	if(this->kids.size() > 0){
 		int maxI = -1;
 		double maxV = 0.01;

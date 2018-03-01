@@ -38,6 +38,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 		this->dist_mcts = new Distributed_MCTS(this->world, this->world->get_nodes()[this->get_agent()->get_loc()], this->get_agent(), NULL, this->coord_update);
 	}
 	this->coord_update++; // Make it a new planning iteration
+	//this->dist_mcts->clean_null_branches(0);
 	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished initializing D_MCTS");
 
 	//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
@@ -49,12 +50,13 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	Distributed_MCTS* parent_of_none = NULL; // this gets set in Dist-MCTS Root
 	int rollout_depth = -1; // Indicate rollout has NOT started!
 	int planning_iter = 0;
+	int max_search_depth = task_list.size();
 	ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: Have dist_mcts root: %i",this->dist_mcts->get_task_index());
 	while( double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
 		planning_iter++;
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 		//2-I am still not updating the path properly, not rebasing when reaching a new (non-goal) node
-		this->dist_mcts->search(true, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
+		this->dist_mcts->search(max_search_depth, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
 		if( planning_iter % 1 == 0){
 			//this->dist_mcts->sample_tree(depth_in);
 		}
