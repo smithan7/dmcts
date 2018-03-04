@@ -106,6 +106,7 @@ public:
 	bool get_pay_obstacle_cost() { return this->pay_obstacle_cost; };
 
 	bool get_at_node() { return this->at_node(); };
+	bool get_at_node(const int &node);
 	cv::Scalar get_color() { return this->color; };
 	cv::Point2i get_edge() { return this->edge; };
 	std::string get_task_selection_method() { return this->task_selection_method; };
@@ -127,6 +128,7 @@ public:
 
 private:
 	// my location
+	double location_radius;
 	Pose* pose;
 	double desired_alt;
 	std::vector<int> path;

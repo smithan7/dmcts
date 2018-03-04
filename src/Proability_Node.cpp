@@ -91,8 +91,8 @@ bool Probability_Node::get_claims_after(double query_time, std::vector<double>& 
 		probs.clear();
 		times.clear();
 		for (int i = 1; i < this->probability_of_completion.size() - 1; i++) {
-			if (this->completion_time[i] > query_time) {
-				probs.push_back(this->probability_of_completion[i] - this->probability_of_completion[i-1]);
+			if (this->completion_time[i] >= query_time) {
+				probs.push_back(this->probability_of_completion[i]);
 				times.push_back(this->completion_time[i]);
 			}
 		}

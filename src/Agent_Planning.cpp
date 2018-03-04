@@ -15,14 +15,16 @@
 #include <ros/ros.h>
 
 Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
+	this->cumulative_planning_iters = 0;
 	this->agent = agent;
 	this->world = world_in;
 	this->task_selection_method = agent->get_task_selection_method();
 	this->planning_iter = 0;
 	this->last_planning_iter_end = -1;
-	this->initial_search_time = 5.0;//this->agent->plan_duration.toSec();
+	this->initial_search_time = 0.5;//this->agent->plan_duration.toSec();
 	this->reoccuring_search_time = 0.95 * this->agent->plan_duration.toSec();
 	this->coord_update = 0;
+	this->at_node = -1;
 }
 
 void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
@@ -50,20 +52,22 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	Distributed_MCTS* parent_of_none = NULL; // this gets set in Dist-MCTS Root
 	int rollout_depth = -1; // Indicate rollout has NOT started!
 	int planning_iter = 0;
-	int max_search_depth = task_list.size();
 	ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: Have dist_mcts root: %i",this->dist_mcts->get_task_index());
 	while( double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
 		planning_iter++;
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 		//2-I am still not updating the path properly, not rebasing when reaching a new (non-goal) node
-		this->dist_mcts->search(max_search_depth, depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
-		if( planning_iter % 1 == 0){
-			//this->dist_mcts->sample_tree(depth_in);
+		this->dist_mcts->search(depth_in, parent_of_none, task_list, task_set, rollout_depth, coord_update);
+
+		if( planning_iter % 1000 == 0){
+			this->dist_mcts->sample_tree(depth_in);
 		}
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: out of search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 	}
 
-	ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished searching tree for %i inters", planning_iter);
+	ROS_INFO("Agent_Planning::D_MCTS_task_selection: planning_iters: %i", planning_iter);
+
+	ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished searching tree for %i iters", planning_iter);
 	this->cumulative_planning_iters += planning_iter;
 
 	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
@@ -110,12 +114,46 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
 		}
 	}
-	
-	if(this->world->get_c_time() > this->initial_search_time && this->agent->get_at_node()){ // Don't explot path / settle on waht to do until I've had a few seconds to think and I am at a node
+	//ROS_WARN("Agent_Planning::D_MCTS_task_selection: edge out %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+}
+
+
+void Agent_Planning::Distributed_MCTS_exploit_tree(){
+	// This should be called by Agent::act -> Agent::select_next_edge() when I have arrived at a node to get my next action/edge to travel down
+	// It functions by setting Agent::goal which is then planned to by select next edge
+
+	if(!this->dist_mcts){
+		// Dist_mcts is not a thing, return
+		return;
+	}
+
+	if(this->world->get_c_time() > this->initial_search_time){ // Don't exploit path / settle on what to do until I've had a few seconds to think
+		// Have I updated from this node before and is it NOT my goal
+		if(this->agent->get_at_node(this->at_node)){
+			// I have updated from this node before, is it my goal?
+			if(this->agent->get_goal()->get_index() == this->at_node && this->world->get_task_status(this->at_node)){
+				// it is my goal, complete the task and continue
+				return;
+			}
+		}
+		else{
+			// I have NOT updated from this node before, update this->at_node
+			if(this->agent->get_at_node(this->agent->get_edge_x())){
+				this->at_node = this->agent->get_edge_x();
+			}
+			else if(this->agent->get_at_node(this->agent->get_edge_y())){
+				this->at_node = this->agent->get_edge_y();
+			}
+			else{
+				return;
+			}
+		}
+
 		// I am at either edge.x / edge.y
 		int max_kid_index = -1;
 		std::vector<std::string> args;
 		std::vector<double> vals;
+		int depth_in = 0;
 		//ROS_ERROR("Agent_Planning::D_MCTS_task_selection: I am at a node and I am on edge: %i/%i with goal: %i and mcts root %i", this->agent->get_edge().x,this->agent->get_edge().y, this->agent->get_goal()->get_index(), this->dist_mcts->get_task_index());
 		if (this->dist_mcts->exploit_tree(max_kid_index, args, vals, depth_in, coord_update)) {
 			int goal_task_index = this->dist_mcts->get_kids()[max_kid_index]->get_task_index();
@@ -195,7 +233,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: resetting dist_mcts root to %i", goal_task_index);
 					Distributed_MCTS* old = this->dist_mcts;
 					this->dist_mcts = this->dist_mcts->get_kids()[0];
-					//delete old;
+					delete old;
 					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: dist_mcts has task_index %i and %i kids", this->dist_mcts->get_task_index(), int(this->dist_mcts->get_kids().size()));
 					this->dist_mcts->set_as_root();
 					//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: reset dist_mcts root");
@@ -217,16 +255,14 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 					}
 					std::cout << std::endl;
 					if(path.size()>2){
-						this->dist_mcts->set_task_index(path[1]);
+						this->dist_mcts->set_task_index(path[path.size()-2]);
 					//	ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward: set task index to %i", path[1]);
 					}
 				}
 			}
 		}
 	}
-	//ROS_WARN("Agent_Planning::D_MCTS_task_selection: edge out %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 }
-
 
 
 Agent_Planning::~Agent_Planning(){}

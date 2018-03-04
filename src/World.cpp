@@ -141,25 +141,8 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->initialized = true;
 }
 
-double World::get_task_reward_at_time(Agent_Coordinator* coord, const int &task_index, const double &time, const bool &use_impact){
-	if(use_impact){
-		
-		std::vector<double> probs;
-		std::vector<double> times;
-		coord->get_claims_after(task_index, time, probs, times);
-		double raw_reward = this->nodes[task_index]->get_reward_at_time(time);
-		double post_reward = 0.0;
-		for(size_t i=0; i<times.size(); i++){
-			if(times[i] > time){
-				post_reward += (1.0 - probs[i]) * std::max(this->nodes[task_index]->get_reward_at_time(time), 0.0);
-			}
-		}
-		double impact = std::max(0.0, raw_reward - post_reward);
-		return impact;
-	}
-	else{
-		return this->nodes[task_index]->get_reward_at_time(time);
-	}
+double World::get_task_reward_at_time(const int &task_index, const double &time){
+	return this->nodes[task_index]->get_reward_at_time(time);
 }
 
 void World::make_obs_mat(){
@@ -351,10 +334,12 @@ void World::generate_tasks() {
 
 void World::activate_task(const int &ti){
 	this->nodes[ti]->activate(this);
+	this->task_status_list[ti] = true;
 }
 
 void World::deactivate_task(const int &ti){
 	this->nodes[ti]->deactivate();
+	this->task_status_list[ti] = false;
 }
 
 int World::get_n_active_tasks(){
@@ -362,6 +347,10 @@ int World::get_n_active_tasks(){
 	for(int i=0; i<this->n_nodes; i++){
 		if(this->nodes[i]->is_active()){
 			cntr++;
+			this->task_status_list[i] = true;
+		}
+		else{
+			this->task_status_list[i] = false;
 		}
 	}
 	return cntr;
@@ -446,6 +435,17 @@ void World::get_task_status_list(std::vector<bool> &task_status_list, std::vecto
 	for (size_t i = 0; i < this->task_status_list.size(); i++) {
 		if (this->task_status_list[i]) {
 			task_set.push_back(int(i));
+		}
+	}
+}
+
+void World::get_claims_after(const int &task_num, const double &query_time, const int &agent_index, std::vector<double> probs, std::vector<double> times){
+	probs.clear();
+	times.clear();
+	for (int a = 0; a < this->n_agents; a++) {
+		if (a != agent_index) { // ignore the specified agent
+			Agent_Coordinator* coord = this->agents[a]->get_coordinator(); // get coordinator for readability
+			coord->get_prob_actions()[task_num]->get_claims_after(query_time, probs, times); // add times and probs for other agent to list
 		}
 	}
 }
@@ -647,7 +647,7 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 	for (int i = 0; i < this->n_agent_types; i++) {
 		agent_travel_vels.push_back(2.0);
 		agent_obstacle_costs.push_back(this->pay_obstacle_cost);
-		agent_work_radii.push_back(2.0);
+		agent_work_radii.push_back(0.1);
 		if(this->my_agent_index == i){
 			double r = 255.0;
 			double b = 0.0;

@@ -5,6 +5,7 @@
 #include "Agent_Planning.h"
 #include "Goal.h"
 #include "Pose.h"
+#include "Distributed_MCTS.h"
 
 #include <iostream>
 #include <ctime>
@@ -23,6 +24,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 	this->desired_alt = des_alt;
 	this->last_pulse_time = ros::Time::now();
 	this->pulse_duration = ros::Duration(3.0);
+	this->location_radius = 0.01;
 	// am I the actual agent or a dummy agent?
 	if(!actual_agent){
 		// dummy agent
@@ -114,7 +116,12 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 
 		// Timer Durations
 		this->plan_duration = ros::Duration(0.1);
-		this->act_duration = ros::Duration(1.0);
+		if(this->index == 0){
+			this->act_duration = ros::Duration(0.1);
+		}
+		else{
+			this->act_duration = ros::Duration(0.1);
+		}
 		this->send_loc_duration = ros::Duration(1.0);
 		
 		this->task_list_timer_duration = ros::Duration(0.5); // How frequently do I check if I need to update the task list
@@ -159,6 +166,10 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->act_initialized = false;
 		this->initialized = true;
 	}
+}
+
+bool Agent::get_at_node(const int &node){
+	return this->at_node(node);
 }
 
 void Agent::task_list_timer_callback(const ros::TimerEvent &e){
@@ -276,6 +287,10 @@ void Agent::act_timer_callback(const ros::TimerEvent &e){
 			this->act_initialized = true;
 		}	
 	}
+	//cv::Mat emp(cv::Size(10, 10), CV_8UC1);
+	//cv::namedWindow("na", cv::WINDOW_NORMAL);
+	//cv::imshow("na", emp);
+	//cv::waitKey(0);
 }
 
 void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
@@ -425,6 +440,7 @@ void Agent::task_list_callback(const custom_messages::DMCTS_Task_List &msg){
    			// not in list, deactivate
    			if(flag){
    				this->world->deactivate_task(i);
+   				this->planner->get_dist_mcts()->clean_task(i);
    			}
    		}
    	}
@@ -450,7 +466,7 @@ bool Agent::at_node(int node) {
 	//ROS_ERROR("dx/dy: %.2f, %.2f", dx, dy);
 	double dist = sqrt(pow(dx,2) + pow(dy,2));
 	//ROS_ERROR("dist: %0.2f", dist);
-	if(dist <= this->work_radius){
+	if(dist <= this->location_radius){
 		return true;
 	}
 	else{
@@ -495,6 +511,8 @@ bool Agent::get_travel_time(const int &ti, double &travel_time){
 }
 
 void Agent::select_next_edge() {
+
+	this->planner->Distributed_MCTS_exploit_tree();
 
 	std::vector<int> path;
 	double length = 0.0;

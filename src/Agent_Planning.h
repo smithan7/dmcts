@@ -17,6 +17,8 @@ public:
 	~Agent_Planning();
 	void plan(); // select a new goal, called at every node
 	Agent* get_agent() { return this->agent; };
+	Distributed_MCTS* get_dist_mcts(){return this->dist_mcts; };
+	void Distributed_MCTS_exploit_tree();
 
 private:
 	
@@ -29,6 +31,7 @@ private:
 	std::string task_selection_method; // how do I select tasks
 	int planning_iter, last_planning_iter_end, cumulative_planning_iters;
 	double initial_search_time, reoccuring_search_time;
+	int at_node;
 
 	void set_goal(const int &goal_index);
 	void set_goal(const int &goal_index, std::vector<int> &path);

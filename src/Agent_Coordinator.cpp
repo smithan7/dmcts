@@ -92,16 +92,6 @@ bool Agent_Coordinator::get_advertised_task_claim_probability(const int &task_nu
 	}
 }
 
-bool Agent_Coordinator::get_claims_after(const int &task, const double &query_time, std::vector<double> &probs, std::vector<double> &times) {
-	// if there are claims after the query time, add to list and return true, exclude inf
-	if (this->prob_actions[task]->get_claims_after(query_time, probs, times)){
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
 double Agent_Coordinator::get_reward_impact(const int &task_i, const int &agent_i, const double &completion_time, World* world) {
 	// idea is to identify the expected impact of the agent taking this task
 	// i.e. how much difference will it make, impact = R(completion_time) - Expectation[ R(completion_time -> inf)]
@@ -135,11 +125,11 @@ double Agent_Coordinator::get_reward_impact(const int &task_i, const int &agent_
 			Agent_Coordinator* coord = world->get_agents()[a]->get_coordinator();
 			// get all active claims by each agent and add to the shared plan
 			std::vector<double> p, t;
-			if (coord->get_claims_after(task_i, completion_time, p, t)) {
+			//if (coord->get_claims_after(task_i, completion_time, p, t)) {
 				for (size_t i = 0; i < p.size(); i++) {
 					shared_plan.add_stop_to_shared_path(t[i], p[i]);
 				}
-			}
+			//}
 		}
 	}
 
