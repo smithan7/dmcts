@@ -11,6 +11,12 @@
   <arg name="not_simulation"/>
   <arg name="cruising_speed"/>
   <arg name="use_xbee" default="false"/>
+  <arg name="alpha"/>
+  <arg name="beta"/>
+  <arg name="gamma"/>
+  <arg name="epsilon"/>
+  <arg name="min_sampling_threshold"/>
+  <arg name="search_depth"/>
 
   <group ns="dmcts_$(arg agent_index)">
     <param name="param_number" value="$(arg param_number)"/>
@@ -24,6 +30,14 @@
     <param name="p_task_initially_active" type="double" value="$(arg p_task_initially_active)"/>
     <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
     <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
+    <param name="alpha" value="$(arg alpha)"/>
+    <param name="beta" value="$(arg beta)"/>
+    <param name="gamma" value="$(arg gamma)"/>
+    <param name="epsilon" value="$(arg epsilon)"/>
+    <param name="search_depth" value="$(arg search_depth)"/>
+    <param name="min_sampling_threshold" value="$(arg min_sampling_threshold)"/>
+
+
 
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
     

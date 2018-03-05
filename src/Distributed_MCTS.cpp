@@ -38,7 +38,7 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 	}
 	
 
-	this->max_search_depth = 6;//this->world->get_n_active_tasks();
+	this->max_search_depth = this->world->search_depth;//6//this->world->get_n_active_tasks();
 
 	// MCTS stuff
 	this->raw_reward = 0.0; // How much am I worth at completion time w/o coordination
@@ -49,15 +49,15 @@ Distributed_MCTS::Distributed_MCTS(World* world, Map_Node* task_in, Agent* agent
 
 
 	// sampling stuff
-	this->alpha = 0.01; // Gradient ascent rate for coordination / learning rate on probable actions
-	this->min_sampling_probability_threshold = 0.005; // How far down the tree will I search?
+	this->alpha = this->world->alpha; //0.01;// Gradient ascent rate for coordination / learning rate on probable actions
+	this->min_sampling_probability_threshold = this->world->min_sampling_threshold; //0.005; // How far down the tree will I search?
 
 	// D-UCB Stuff
 	this->cumulative_reward = 0.0; // what is the total cumulative reward across all historical pulls
 	this->mean_reward = 0.0; // cumulative reward / number_pulls
-	this->gamma = 0.999; // How long of a memory should I keep?
-	this->epsilon = 0.5; // UCB weight term for parent number_pulls
-	this->beta = 1.41; // explore vs exploit
+	this->gamma = this->world->gamma; //0.999; // How long of a memory should I keep?
+	this->epsilon = this->world->epsilon; //0.5; // UCB weight term for parent number_pulls
+	this->beta = this->world->beta; //1.41; // explore vs exploit
 
 	//ROS_WARN("Distributed_MCTS::Distributed_MCTS: setting initial values");
 	this->search_type = this->world->get_mcts_search_type();

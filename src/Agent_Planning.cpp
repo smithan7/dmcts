@@ -28,7 +28,7 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 }
 
 void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
-	ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: in 'Distributed_MCTS_task_by_completion_reward' on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
+	//ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: in 'Distributed_MCTS_task_by_completion_reward' on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 	double reward_in = 0.0;
 	double s_time = double(clock()) / double(CLOCKS_PER_SEC);
 	std::vector<bool> task_list; // list of all tasks status, true if active, false if complete
@@ -52,7 +52,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	Distributed_MCTS* parent_of_none = NULL; // this gets set in Dist-MCTS Root
 	int rollout_depth = -1; // Indicate rollout has NOT started!
 	int planning_iter = 0;
-	ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: Have dist_mcts root: %i",this->dist_mcts->get_task_index());
+	//ROS_WARN("Agent_Planning::Distributed_MCTS_task_by_completion_reward: Have dist_mcts root: %i",this->dist_mcts->get_task_index());
 	while( double(clock()) / double(CLOCKS_PER_SEC) - s_time <= this->reoccuring_search_time){
 		planning_iter++;
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: really going into search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
@@ -65,9 +65,9 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: out of search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 	}
 
-	ROS_INFO("Agent_Planning::D_MCTS_task_selection: planning_iters: %i", planning_iter);
+	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: planning_iters: %i", planning_iter);
 
-	ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished searching tree for %i iters", planning_iter);
+	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished searching tree for %i iters", planning_iter);
 	this->cumulative_planning_iters += planning_iter;
 
 	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
@@ -78,12 +78,12 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	std::vector<double> rewards;
 	this->dist_mcts->get_best_path(best_path, times, rewards, depth_in, coord_update);
 
-	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
-	for(size_t i=0; i<best_path.size(); i++){
+	//std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
+	//for(size_t i=0; i<best_path.size(); i++){
 		//std::cout << std::fixed << std::setprecision(2) << best_path[i] << ", ";
-		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
-	}
-	std::cout << std::endl;
+	//	std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
+	//}
+	//std::cout << std::endl;
 	this->agent->set_path(best_path);
 	
 
@@ -106,14 +106,14 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	*/
 
 	
-	ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s coord tree", this->agent->get_index());
-	this->agent->get_coordinator()->print_prob_actions();
-	for(int i=0; i<this->world->get_n_agents(); i++){
-		if(i != this->agent->get_index()){
-			ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
-			this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
-		}
-	}
+	//ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s coord tree", this->agent->get_index());
+	//this->agent->get_coordinator()->print_prob_actions();
+	//for(int i=0; i<this->world->get_n_agents(); i++){
+	//	if(i != this->agent->get_index()){
+	//		ROS_INFO("Agent_Planning::Distributed_MCTS_task_by_completion_reward::Agent[%i]'s understanding of agent[%i]s coord tree", this->agent->get_index(), i);
+	//		this->world->get_agents()[i]->get_coordinator()->print_prob_actions();
+	//	}
+	//}
 	//ROS_WARN("Agent_Planning::D_MCTS_task_selection: edge out %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 }
 

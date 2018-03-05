@@ -17,7 +17,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed ) {
+World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed, const double &alpha, const double &beta, const double &epsilon, const double &gamma, const double &min_sampling_threshold, const int &search_depth ) {
 	//ROS_INFO("DMCTS::World::my_agent_index_in: %i", my_agent_index_in);
 	//std::cerr << "World::World::this->task_selection_method: " << task_selection_method << std::endl;
 	this->initialized = false;
@@ -36,6 +36,12 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->flat_tasks = true;
 	this->p_task_initially_active = p_initially_active; // how likely is it that a task is initially active, 3-0.25, 5-0.5, 7-0.75
 	this->pay_obstacle_cost = pay_obs;
+	this->alpha = alpha;
+	this->beta = beta;
+	this->gamma = gamma;
+	this->epsilon = epsilon;
+	this->min_sampling_threshold = min_sampling_threshold;
+	this->search_depth = search_depth;
 
 	// how often do I plot
 	this->plot_duration = ros::Duration(1); 
@@ -109,7 +115,6 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->write_params();
 	//}
 	
-
 	if (this->task_selection_method == "mcts_task_by_completion_reward_impact_before_and_after") {
 		this->impact_style = "before_and_after";
 		this->task_selection_method = "mcts_task_by_completion_reward_impact";
