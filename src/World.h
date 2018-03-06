@@ -15,7 +15,7 @@ class Agent_Coordinator;
 class World
 {
 public:
-	World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed, const double &alpha, const double &beta, const double &epsilon, const double &gamma, const double &min_sampling_threshold, const int &search_depth);
+	World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed, const double &alpha, const double &beta, const double &epsilon, const double &gamma, const double &min_sampling_threshold, const int &search_depth, const double &end_time, const double &way_point_tol);
 	// doing everything
 	//void iterate_all();
 	double get_team_probability_at_time_except(const double & time, const int & task, const int & except_agent);
@@ -75,7 +75,7 @@ public:
 	bool valid_agent(const int a);
 	bool are_nbrs(const int &t1, const int &t2);
 
-	double alpha, beta, epsilon, gamma, min_sampling_threshold;
+	double alpha, beta, epsilon, gamma, min_sampling_threshold, way_point_tollerance;
 	int search_depth;
 
 private:

@@ -24,7 +24,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 	this->desired_alt = des_alt;
 	this->last_pulse_time = ros::Time::now();
 	this->pulse_duration = ros::Duration(3.0);
-	this->location_radius = 0.01;
+	this->location_radius = world_in->way_point_tollerance;
 	// am I the actual agent or a dummy agent?
 	if(!actual_agent){
 		// dummy agent

@@ -17,7 +17,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed, const double &alpha, const double &beta, const double &epsilon, const double &gamma, const double &min_sampling_threshold, const int &search_depth ) {
+World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display_plot, const bool &score_run, const std::string &task_selection_method, const std::string &world_directory, const int &my_agent_index_in, const int &n_nodes_in, const int &number_of_agents_in, const double &desired_alt, const double &p_initially_active, const bool &pay_obs, const double &cruising_speed, const double &alpha, const double &beta, const double &epsilon, const double &gamma, const double &min_sampling_threshold, const int &search_depth, const double &end_time, const double &way_point_tol) {
 	//ROS_INFO("DMCTS::World::my_agent_index_in: %i", my_agent_index_in);
 	//std::cerr << "World::World::this->task_selection_method: " << task_selection_method << std::endl;
 	this->initialized = false;
@@ -33,7 +33,7 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->world_directory = world_directory;
 	this->my_agent_index = my_agent_index_in;
 	this->n_agents = number_of_agents_in;
-	this->flat_tasks = true;
+	this->flat_tasks = false;
 	this->p_task_initially_active = p_initially_active; // how likely is it that a task is initially active, 3-0.25, 5-0.5, 7-0.75
 	this->pay_obstacle_cost = pay_obs;
 	this->alpha = alpha;
@@ -42,6 +42,7 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	this->epsilon = epsilon;
 	this->min_sampling_threshold = min_sampling_threshold;
 	this->search_depth = search_depth;
+	this->way_point_tollerance = way_point_tol;
 
 	// how often do I plot
 	this->plot_duration = ros::Duration(1); 
@@ -63,7 +64,7 @@ World::World(ros::NodeHandle nHandle, const int &param_file, const bool &display
 	// time stuff
 	this->c_time = 0.0;
 	this->dt = 1.0;
-	this->end_time = 100000.0;
+	this->end_time = end_time;
 
 	// map and PRM stuff
 	this->map_height = 100.0; 

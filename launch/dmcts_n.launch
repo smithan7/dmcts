@@ -17,6 +17,8 @@
   <arg name="epsilon"/>
   <arg name="min_sampling_threshold"/>
   <arg name="search_depth"/>
+  <arg name="end_time"/>
+  <arg name="way_point_tol"/>
 
   <group ns="dmcts_$(arg agent_index)">
     <param name="param_number" value="$(arg param_number)"/>
@@ -36,9 +38,9 @@
     <param name="epsilon" value="$(arg epsilon)"/>
     <param name="search_depth" value="$(arg search_depth)"/>
     <param name="min_sampling_threshold" value="$(arg min_sampling_threshold)"/>
-
-
-
+    <param name="end_time" value="$(arg end_time)"/>
+    <param name="way_point_tol" value="$(arg way_point_tol)"/>
+    
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
     
     <group if="$(arg not_simulation)">

@@ -16,7 +16,7 @@ int main(int argc, char *argv[]){
 	int test_environment_number, agent_index, params, n_nodes,n_agents, parameter_seed;
 	bool display_map, score_run, pay_obstacle_costs;
 	std::string task_selection_method;
-	double desired_alt, p_task_initially_active, cruising_speed;
+	double desired_alt, p_task_initially_active, cruising_speed, end_time, way_point_tol;
 
 	//std::string task_selection_method = "greedy_completion_reward";
 	//std::string task_selection_method = "mcts_task_by_completion_reward_impact_optimal";
@@ -42,8 +42,8 @@ int main(int argc, char *argv[]){
 	ros::param::get("epsilon", epsilon);
 	ros::param::get("min_sampling_threshold", min_sampling_threshold);
 	ros::param::get("search_depth", search_depth);
-
-
+	ros::param::get("end_time", end_time);
+	ros::param::get("way_point_tol", way_point_tol);
 
 	ROS_INFO("World::initializing agent's world");
 	ROS_INFO("   test_environment_number %i", test_environment_number);
@@ -65,8 +65,10 @@ int main(int argc, char *argv[]){
 	ROS_INFO("   gamma %0.1f", gamma);
 	ROS_INFO("   min_sampling_threshold %0.1f", min_sampling_threshold);
 	ROS_INFO("   search_depth %0.1f", search_depth);
+	ROS_INFO("   end_time %0.1f", end_time);
+	ROS_INFO("   way_point_tol %0.1f", way_point_tol);
 
-	World world = World(nHandle, parameter_seed, display_map, score_run, task_selection_method, world_directory, agent_index, n_nodes, n_agents, desired_alt, p_task_initially_active, pay_obstacle_costs, cruising_speed, alpha, beta, epsilon, gamma, min_sampling_threshold, int(search_depth));
+	World world = World(nHandle, parameter_seed, display_map, score_run, task_selection_method, world_directory, agent_index, n_nodes, n_agents, desired_alt, p_task_initially_active, pay_obstacle_costs, cruising_speed, alpha, beta, epsilon, gamma, min_sampling_threshold, int(search_depth), end_time, way_point_tol);
 
 	// return the control to ROS
 	ros::spin();
