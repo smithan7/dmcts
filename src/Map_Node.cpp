@@ -32,6 +32,7 @@ Map_Node::Map_Node(const double &x, const double &y, const int &index, const dou
 
 	this->end_mission_time = world->get_end_time();
 
+
 	// how much work does it take to complete this task
 	this->min_work = world->get_min_task_work(this->task_type);
 	this->max_work = world->get_max_task_work(this->task_type);

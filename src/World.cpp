@@ -154,18 +154,18 @@ double World::get_task_reward_at_time(const int &task_index, const double &time)
 void World::make_obs_mat(){
 	this->Obs_Mat = cv::Mat::zeros(this->map_width, this->map_height, CV_8UC1);
 	this->obstacles.clear();
-	ROS_INFO("DMCTS::World::make_obs_mat: making obstacles");
+	ROS_INFO("DMCTS_World::World::make_obs_mat: making obstacles");
 	while(this->obstacles.size() < 10){
 		//ROS_INFO("making obstacle");
 		// create a potnetial obstacle
 		double rr = rand_double_in_range(1,10);
-		double xx = rand_double_in_range(0,this->map_width);
-		double yy = rand_double_in_range(0,this->map_height);
+		double xx = rand_double_in_range(-this->map_width/2.1,this->map_width/2.1);
+		double yy = rand_double_in_range(-this->map_height/2.1,this->map_height/2.1);
 		//ROS_INFO("obs: %.1f, %.1f, r =  %.1f", xx, yy, rr);
 		// check if any starting locations are in an obstacle
 		bool flag = true;
 		for(size_t s=0; s<this->starting_locs.size(); s++){
-			double d = sqrt(pow(xx-(this->starting_locs[s].x+this->map_width/2),2) + pow(yy-this->starting_locs[s].y+this->map_height/2,2));
+			double d = sqrt(pow(xx-this->starting_locs[s].x,2) + pow(yy-this->starting_locs[s].y,2));
 			//ROS_INFO("starting_locs: %.1f, %.1f, d = %.1f", this->starting_locs[s].x+this->map_width/2, this->starting_locs[s].y+this->map_height/2, d);
 			if(rr+2 >= d ){
 				// starting loc is in obstacle
@@ -177,8 +177,8 @@ void World::make_obs_mat(){
 		if(flag){
 			for(size_t s=0; s<this->obstacles.size(); s++){
 				double d = sqrt(pow(xx-this->obstacles[s][0],2) + pow(yy-this->obstacles[s][1],2));
-				if(rr+1 >= d || this->obstacles[s][2]+1 >= d){
-					// obstacle is in obstacle
+				if(rr + this->obstacles[s][2]+1 >= d){
+					// obstacle is in obstacle so don't make
 					flag = false;
 					break;
 				}
@@ -192,13 +192,12 @@ void World::make_obs_mat(){
 
 	for(int j=4; j>0; j--){
 		for(size_t i=0; i<this->obstacles.size(); i++){
-			cv::circle(this->Obs_Mat, cv::Point(this->obstacles[i][0], this->obstacles[i][1]), this->obstacles[i][2]+j, cv::Scalar(255 - 25*j), -1);	
+			cv::circle(this->Obs_Mat, cv::Point((this->obstacles[i][0]+this->map_width/2), (this->obstacles[i][1]+this->map_height/2)), this->obstacles[i][2]+j, cv::Scalar(255 - 25*j), -1);
 		}
 	}
 
-
-	//cv::namedWindow("DMCTS::World::make_obs_mat:Obstacles", cv::WINDOW_NORMAL);
-	//cv::imshow("DMCTS::World::make_obs_mat:Obstacles", this->Obs_Mat);
+	//cv::namedWindow("DMCTS_World::World::make_obs_mat:Obstacles", cv::WINDOW_NORMAL);
+	//cv::imshow("DMCTS_World::World::make_obs_mat:Obstacles", this->Obs_Mat);
 	//cv::waitKey(0);
 }
 
@@ -499,7 +498,7 @@ void World::display_world(const int &ms) {
 		this->PRM_Mat = cv::Mat::zeros(int(des_x), int(des_y), CV_8UC3);
 		// draw obstacles
 		for(size_t i=0; i<this->obstacles.size(); i++){
-			cv::Point2d pp = cv::Point2d(this->obstacles[i][0]*scale_x, this->obstacles[i][1]*scale_y);
+			cv::Point2d pp = cv::Point2d((this->obstacles[i][0]+ + this->map_width/2)*scale_x, (this->obstacles[i][1]+ + this->map_width/2)*scale_y);
 			cv::circle(this->PRM_Mat, pp, this->obstacles[i][2]*scale_x, cv::Scalar(127, 127, 127), -1);
 		}
 
@@ -512,7 +511,7 @@ void World::display_world(const int &ms) {
 					double dist = 0.0;
 					if (this->nodes[i]->get_nbr_obstacle_cost(iter, cost) && this->nodes[i]->get_nbr_distance(iter, dist)) {
 						cost = (cost - dist) / cost;
-						cv::Scalar pink(uchar(255.0*(1.0 - cost)), uchar(255.0*(1.0 - cost)), 255);
+						cv::Vec3b pink(uchar(255.0*(1.0 - cost)), uchar(255.0*(1.0 - cost)), 255);
 						cv::Point2d p1 = this->nodes[i]->get_loc();
 						cv::Point2d p2 = this->nodes[index]->get_loc();
 						p1.x = scale_x * (p1.x + this->map_width/2); p1.y = scale_y * (p1.y + this->map_height/2);
@@ -561,44 +560,48 @@ void World::display_world(const int &ms) {
 		}
 	}
 
-	/*
-	// draw agent goals
-	for (int i = 0; i < this->n_agents; i++) {
-		if(this->agents[i]->get_goal()){
-			cv::Point2d l = this->nodes[this->agents[i]->get_goal()->get_index()]->get_loc();
-			l.x *= scale_x; l.y *= scale_y;
-			cv::circle(map, l, 8, red, -1);
-			cv::circle(map, l, 4, black, -1);
-		}
-	}
-	*/
-
 	// draw agents
 	for (int i = 0; i < this->n_agents; i++) {
 		// draw their location
 		cv::Point2d p1(this->agents[i]->get_pose()->get_x(), this->agents[i]->get_pose()->get_y());
 		p1.x = scale_x * (p1.x + this->map_width/2); p1.y = scale_y * (p1.y + this->map_height/2);
 		if(p1.x >= 0.0 && p1.x <= des_x && p1.y >= 0.0 && p1.y <= des_y){
-			cv::circle(map, p1, 8, red, -1);
+			cv::circle(map, p1, 8, this->agents[i]->get_color(), -1);
 		
 			// draw line to their edge x
 			if(this->agents[i]->get_edge_x() >= 0 && this->agents[i]->get_edge_x() <= this->n_nodes){		
 				cv::Point2d p2 = this->nodes[this->agents[i]->get_edge_x()]->get_loc();
 				p2.x = scale_x * (p2.x + this->map_width/2); p2.y = scale_y * (p2.y + this->map_height/2);
-				cv::line(map, p1, p2, red, 2);
+				cv::line(map, p1, p2, this->agents[i]->get_color(), 2);
 			}
 			
 			// draw line to their edge y
 			if(this->agents[i]->get_edge_y() >= 0 && this->agents[i]->get_edge_y() <= this->n_nodes){
 				cv::Point2d p3 = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
 				p3.x = scale_x * (p3.x + this->map_width/2); p3.y = scale_y * (p3.y + this->map_height/2);
-				cv::line(map, p1, p3, red, 2);
+				cv::line(map, p1, p3, this->agents[i]->get_color(), 2);
 			}
 
 			char text[10];
 			sprintf(text, "%i", i);
-			cv::putText(map, text, p1, CV_FONT_HERSHEY_COMPLEX, 1.0, red, 3);
+			cv::putText(map, text, p1, CV_FONT_HERSHEY_COMPLEX, 1.0, this->agents[i]->get_color(), 3);
 		}
+
+		std::vector<int> a_path = this->agents[i]->get_path();
+		if(a_path.size() > 0){
+			cv::Point p_loc = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
+			p_loc.x = scale_x * (p_loc.x + this->map_width/2); p_loc.y = scale_y * (p_loc.y + this->map_height/2);
+			for(size_t j=1; j<a_path.size(); j++){
+				cv::Point p_cur = this->nodes[a_path[j]]->get_loc();
+				p_cur.x = scale_x * (p_cur.x + this->map_width/2); p_cur.y = scale_y * (p_cur.y + this->map_height/2);
+				cv::Point p1(p_cur.x - 10*i, p_cur.y - 10*i);
+				cv::Point p2(p_loc.x - 10*i, p_loc.y - 10*i);
+
+				cv::arrowedLine(map, p2, p1, this->agents[i]->get_color(), 4);
+				p_loc = p_cur;
+			}
+		}
+
 	}
 	
 	cv::putText(map, this->task_selection_method, cv::Point2d(40.0, des_y + 30.0), CV_FONT_HERSHEY_COMPLEX, 1.0, white, 3);
@@ -770,7 +773,7 @@ void World::initialize_PRM() {
 				val_sum += double(this->Obs_Mat.at<uchar>(lit.pos()))/255.0;
 			}
 			double mean_val = val_sum / double(lit.count);
-			double obs_cost = min_dist*(1+mean_val);
+			double obs_cost = min_dist + 3.14159*mean_val;
 			this->nodes[i]->add_nbr(mindex, min_dist, obs_cost);
 			this->nodes[mindex]->add_nbr(i, min_dist, obs_cost);
 			this->travel_distances.at<float>(i,mindex) = min_dist;
@@ -928,8 +931,9 @@ void World::initialize_nodes_and_tasks() {
 		bool flag = true;
 
 		while(flag){
-			x = this->rand_double_in_range(-this->map_width/2, this->map_width/2);
-			y = this->rand_double_in_range(-this->map_height/2, this->map_height/2);
+			x = this->rand_double_in_range(-this->map_width/2.1, this->map_width/2.1);
+			y = this->rand_double_in_range(-this->map_height/2.1, this->map_height/2.1);
+
 			if(this->Obs_Mat.at<uchar>(cv::Point(x + this->map_width/2,y+this->map_height/2)) == 0){
 				flag = false;
 			}
