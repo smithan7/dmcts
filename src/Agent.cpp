@@ -21,24 +21,25 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 	this->initialized = false;
 	this->map_offset_x = 0.0;
 	this->map_offset_y = 0.0;
-	this->desired_alt = des_alt;
 	this->last_pulse_time = ros::Time::now();
 	this->pulse_duration = ros::Duration(3.0);
 	this->location_radius = world_in->way_point_tollerance;
 	// am I the actual agent or a dummy agent?
+
+	this->world = world_in;
+	this->index = this->world->my_agent_index;
+	this->work_radius = work_radius;
+	this->type = type;
+	this->travel_vel = this->world->agent_cruising_speed;
+	this->pay_obstacle_cost = pay_obstacle_cost;
+	this->desired_alt = this->world->desired_alt;
+
 	if(!actual_agent){
 		// dummy agent
-		this->world = world_in;
-		this->index = index_in;
-		this->work_radius = work_radius;
-		this->type = type;
-		this->travel_vel = travel_vel;
-		this->pay_obstacle_cost = pay_obstacle_cost;
 		this->color = color;
 		this->coordinator = new Agent_Coordinator(this, this->world->get_n_nodes());
 	}
 	else{
-		this->world = world_in;
 		////////////////////// How do I select my goal ////////////////////////////////////////////
 		{
 			//////////////////////////////// greedy methods
@@ -92,7 +93,6 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 			//this->task_claim_method = "sample"; // all tasks get P(t) = (V(t)-V_min)/(V_max-V_min);
 		}
 
-		this->index = index_in;
 		// Publish to Quad
 		char bf[50];
 		int n = sprintf(bf, "/dmcts_%i/travel_goal", this->index);
@@ -193,7 +193,7 @@ void Agent::work_timer_callback(const ros::TimerEvent &e){
 }
 
 void Agent::pulse_callback(const custom_messages::DMCTS_Pulse &msg){
-	
+	//ROS_INFO("Agent::pulse_callback: in ");
 	this->last_pulse_time = ros::Time::now();
 	if(this->index > msg.my_index){
 		this->world->set_time(msg.c_time);
@@ -230,6 +230,7 @@ void Agent::publish_coordination(){
 
 void Agent::coordination_callback(const custom_messages::DMCTS_Coordination &msg){
 	//ROS_WARN("my index is %i and msg.index is %i", this->index, msg.agent_index);
+	//ROS_INFO("Agent::coordination_callback: in");
 	if(this->index == msg.agent_index){
 	//	ROS_WARN("returning");
 		return;
@@ -258,6 +259,7 @@ void Agent::publish_task_list_request(){
 }
 
 void Agent::plan_timer_callback(const ros::TimerEvent &e){
+	//ROS_INFO("Agent::plan_timer_callback: in");
 	if(this->m_node_initialized){
 		if(this->task_list_initialized){
 			if(!this->plan()){
@@ -279,6 +281,7 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 }
 
 void Agent::act_timer_callback(const ros::TimerEvent &e){
+	//ROS_INFO("Agent::act_timer_callback: in");
 	if(this->plan_initialized && this->m_node_initialized && this->task_list_initialized){
 		if(!this->act()){
 			ROS_ERROR("Agent[%i]::act_timer_callback: Agent->act() Failed", this->index);
@@ -294,6 +297,7 @@ void Agent::act_timer_callback(const ros::TimerEvent &e){
 }
 
 void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
+	//ROS_INFO("Agent::publish_loc_timer_callback: in");
 	
 	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration){
 		this->run_status = 0;
@@ -314,6 +318,7 @@ void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
 }
 
 void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
+	//ROS_INFO("Agent::odom_callback: in");
 	// from video https://www.youtube.com/watch?v=LDMybJQVohk
 	double r,p,yaw;
 	tf::Quaternion quater;
@@ -402,6 +407,7 @@ void Agent::request_task_list(){
 }
 
 void Agent::work_status_callback(const custom_messages::DMCTS_Work_Status &msg){
+	//ROS_INFO("Agent::work_status_callback: in");
 	if (msg.success == 0){
 		this->world->get_nodes()[msg.n_index]->deactivate();
 		return;
@@ -423,7 +429,7 @@ void Agent::work_status_callback(const custom_messages::DMCTS_Work_Status &msg){
 }
 
 void Agent::task_list_callback(const custom_messages::DMCTS_Task_List &msg){
-	
+	//ROS_INFO("Agent::task_list_callback: in");
 	//ROS_WARN("Agent[%i]::task_list_callback: recieved");
 	//ROS_WARN("Agent[%i]::task_list_callback: %i", int(srv.response.node_indices.size()));
 	
@@ -440,7 +446,9 @@ void Agent::task_list_callback(const custom_messages::DMCTS_Task_List &msg){
    			// not in list, deactivate
    			if(flag){
    				this->world->deactivate_task(i);
-   				this->planner->get_dist_mcts()->clean_task(i);
+   				if(this->planner->get_dist_mcts()){
+   					this->planner->get_dist_mcts()->clean_task(i);
+   				}
    			}
    		}
    	}
@@ -512,7 +520,9 @@ bool Agent::get_travel_time(const int &ti, double &travel_time){
 
 void Agent::select_next_edge() {
 
-	this->planner->Distributed_MCTS_exploit_tree();
+	if(this->planner->get_dist_mcts()){
+		this->planner->Distributed_MCTS_exploit_tree();
+	}
 
 	std::vector<int> path;
 	double length = 0.0;

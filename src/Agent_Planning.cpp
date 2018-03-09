@@ -25,6 +25,9 @@ Agent_Planning::Agent_Planning(Agent* agent, World* world_in){
 	this->reoccuring_search_time = 0.95 * this->agent->plan_duration.toSec();
 	this->coord_update = 0;
 	this->at_node = -1;
+	this->dist_mcts = NULL;
+	this->mcts = NULL;
+	this->dmcts = NULL;
 }
 
 void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {

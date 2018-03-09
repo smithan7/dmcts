@@ -1,52 +1,20 @@
 
 <launch>
-  <arg name="num_nodes"/>
-  <arg name="num_agents"/>
-  <arg name="coord_method"/>
   <arg name="agent_index"/>
   <arg name="desired_altitude"/>
-  <arg name="param_number"/>
-  <arg name="p_task_initially_active"/>
   <arg name="pay_obstacle_costs"/>
-  <arg name="not_simulation"/>
   <arg name="cruising_speed"/>
-  <arg name="use_xbee" default="false"/>
-  <arg name="alpha"/>
-  <arg name="beta"/>
-  <arg name="gamma"/>
-  <arg name="epsilon"/>
-  <arg name="min_sampling_threshold"/>
-  <arg name="search_depth"/>
-  <arg name="end_time"/>
-  <arg name="way_point_tol"/>
+  <arg name="use_hector_quad"/>
+  <arg name="use_xbee"/>
 
+  <param name="agent_index" value="$(arg agent_index)"/>
+  <param name="desired_altitude" type="double" value="$(arg desired_altitude)"/>
+  <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
+  <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
+  
   <group ns="dmcts_$(arg agent_index)">
-    <param name="param_number" value="$(arg param_number)"/>
-    <param name="agent_index" value="$(arg agent_index)"/>
-    <param name="world_directory" type="str" value="//home/nvidia/catkin_ws/src/dmcts_world/worlds/"/>
-    <param name="display_map" type="bool" value="false"/>
-    <param name="number_of_nodes" value="$(arg num_nodes)"/>
-    <param name="number_of_agents" value="$(arg num_agents)"/>
-    <param name="coord_method" type="str" value="$(arg coord_method)"/>
-    <param name="desired_altitude" type="double" value="$(arg desired_altitude)"/>
-    <param name="p_task_initially_active" type="double" value="$(arg p_task_initially_active)"/>
-    <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
-    <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
-    <param name="alpha" value="$(arg alpha)"/>
-    <param name="beta" value="$(arg beta)"/>
-    <param name="gamma" value="$(arg gamma)"/>
-    <param name="epsilon" value="$(arg epsilon)"/>
-    <param name="search_depth" value="$(arg search_depth)"/>
-    <param name="min_sampling_threshold" value="$(arg min_sampling_threshold)"/>
-    <param name="end_time" value="$(arg end_time)"/>
-    <param name="way_point_tol" value="$(arg way_point_tol)"/>
-    
+        
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
-    
-    <group if="$(arg not_simulation)">
-        <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
-        <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
-    </group>
     
     <group if="$(arg use_xbee)">
         <param name="com_port" value="/dev/ttyUSB0"/>
@@ -57,6 +25,12 @@
         
         <node pkg="xbee_bridge" name="xbee_bridge" type="xbee_bridge.py"/>
     </group>
+    
+    <group if="$(arg use_hector_quad)">
+      <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
+      <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
+    </group>
+    
   </group>
 
 
