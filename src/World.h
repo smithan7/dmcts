@@ -75,9 +75,11 @@ public:
 	bool valid_agent(const int a);
 	bool are_nbrs(const int &t1, const int &t2);
 
+	bool use_gazebo;
+
 	double alpha, beta, epsilon, gamma, min_sampling_threshold, way_point_tollerance;
 	int search_depth;
-	int my_agent_index;
+	int my_agent_index, my_agent_type;
 	double agent_cruising_speed, desired_alt;
 private:
 	double north_lat, south_lat, east_lon, west_lon, origin_lat, origin_lon;
@@ -106,6 +108,8 @@ private:
 	double p_pay_obstacle_cost; // probability that a generated agent will have to pay obstacle tolls
 	double obstacle_increase;
 	bool pay_obstacle_cost;
+
+	bool hardware_trial;
 
 	int k_map_connections; // minimum number of connections in graph
 	double k_connection_radius; // how close should I be to connect

@@ -19,6 +19,7 @@
 
 World::World(ros::NodeHandle nHandle){
 
+	double speed_penalty;
 	ros::param::get("/test_environment_img", this->test_environment_img);
 	ros::param::get("/test_obstacle_img", this->test_obstacle_img);
 	ros::param::get("/agent_index", this->my_agent_index);
@@ -32,6 +33,7 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/p_task_initially_active", this->p_task_initially_active);
 	ros::param::get("/pay_obstacle_costs", this->pay_obstacle_cost);
 	ros::param::get("/cruising_speed", this->agent_cruising_speed);
+	ros::param::get("/use_gazebo", this->use_gazebo);
 	ros::param::get("/alpha", this->alpha);
 	ros::param::get("/beta", this->beta);
 	ros::param::get("/gamma", this->gamma);
@@ -47,6 +49,12 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/inflation_iters", this->inflation_iters);
 	ros::param::get("/obstacle_increase", this->obstacle_increase);
 	ros::param::get("/agent_display_map", this->show_display);
+	ros::param::get("/hardware_trial", this->hardware_trial);
+	ros::param::get("/agent_type", this->my_agent_type);
+	ros::param::get("/flat_tasks", this->flat_tasks);
+	ros::param::get("/speed_penalty", speed_penalty);
+	ros::param::get("/n_task_types", this->n_task_types);
+	ros::param::get("/n_agent_types", this->n_agent_types);
 
 	ROS_INFO("World::initializing agent's world");
 	ROS_INFO("   test_environment_img %s", this->test_environment_img.c_str());
@@ -63,6 +71,7 @@ World::World(ros::NodeHandle nHandle){
 	ROS_INFO("   p_task_initially_active %0.4f", this->p_task_initially_active);
 	ROS_INFO("   pay_obstacle_costs %i", this->pay_obstacle_cost);
 	ROS_INFO("   cruising_speed %0.2f", this->agent_cruising_speed);
+	ROS_INFO("   use_gazebo %i", this->use_gazebo);
 	ROS_INFO("   alpha %0.2f", this->alpha);
 	ROS_INFO("   beta %0.2f", this->beta);
 	ROS_INFO("   epsilon %0.2f", this->epsilon);
@@ -78,13 +87,20 @@ World::World(ros::NodeHandle nHandle){
 	ROS_INFO("   inflation_iters %i", this->inflation_iters);
 	ROS_INFO("   obstacle_increase %0.2f", this->obstacle_increase);
 	ROS_INFO("   show display %i", this->show_display);
+	ROS_INFO("   hardware_trial %i", this->hardware_trial);
+	ROS_INFO("   agent_type %i", this->my_agent_type);
+	ROS_INFO("   flat_tasks %i", this->flat_tasks);
+	ROS_INFO("   speed_penalty %.2f", speed_penalty);
+	ROS_INFO("   n_task_types %i", this->n_task_types);
+	ROS_INFO("   n_agent_types %i", this->n_agent_types);
+
+	this->agent_cruising_speed *= (1.0-speed_penalty);
 
 	this->initialized = false;
 	this->mcts_search_type = "SW-UCT"; // UCT or SW-UCT
 	this->mcts_reward_type = "normal"; // "impact";
 	this->impact_style = "nn";
 	this->mcts_n_kids = 10;
-	this->flat_tasks = false;
 
 	// how often do I plot
 	this->plot_duration = ros::Duration(1); 
@@ -95,13 +111,24 @@ World::World(ros::NodeHandle nHandle){
 
 	// time stuff
 	this->c_time = 0.0;
-	this->dt = 1.0;
 	this->end_time = end_time;
 
 	// map and PRM stuff
 	this->map_width_meters = this->get_global_distance(this->north_lat, this->west_lon, this->north_lat, this->east_lon);
 	this->map_height_meters = this->get_global_distance(this->north_lat, this->west_lon, this->south_lat, this->west_lon);
-	ROS_INFO("    map size: %0.2f, %0.2f (meters)", this->map_width_meters, this->map_height_meters);
+
+	if(this->use_gazebo){
+		if(this->map_width_meters > this->map_height_meters){
+			this->map_height_meters = 90.0 * this->map_height_meters / this->map_width_meters;
+			this->map_width_meters = 90.0;
+		}
+		else{
+			this->map_width_meters = 90.0 * this->map_width_meters / this->map_height_meters;
+			this->map_height_meters = 90.0;
+		}
+	}
+
+	ROS_INFO("DMCTS::Word::World(): map size: %0.2f, %0.2f (meters)", this->map_width_meters, this->map_height_meters);
 	this->n_obstacles = 10;
 	this->k_map_connections = 5;
 	this->k_connection_radius = 10.0;
@@ -111,7 +138,6 @@ World::World(ros::NodeHandle nHandle){
 	this->p_pay_obstacle_cost = 0.0;
 	
 	// task stuff
-	this->n_task_types = 4; // how many types of tasks are there
 	this->p_impossible_task = 0.0; // how likely is it that an agent is created that cannot complete a task
 	this->p_activate_task = 0.0;// 1.0*this->dt; // how likely is it that I will activate a task each second? *dt accounts per iters per second
 	this->min_task_time = 1000.0; // shortest time to complete a task
@@ -122,24 +148,23 @@ World::World(ros::NodeHandle nHandle){
 	this->max_task_reward = 500.0;
 
 	// agent stuff
-	this->n_agent_types = 1; // how many types of agents
 	this->min_travel_vel = 2.3; // 5 - slowest travel speed
 	this->max_travel_vel = 2.7; // 25 - fastest travel speed
 	this->min_agent_work = 100.0; // min amount of work an agent does per second
 	this->max_agent_work = 100.0; // max amount of work an agent does per second
 
 	// agent starting locations
-	this->starting_locs.push_back(cv::Point2d(-25,-25));
-	this->starting_locs.push_back(cv::Point2d(25,25));
-	this->starting_locs.push_back(cv::Point2d(-25,25));
-	this->starting_locs.push_back(cv::Point2d(25,-25));
-	this->starting_locs.push_back(cv::Point2d(0,25));
-	this->starting_locs.push_back(cv::Point2d(25,0));
-	this->starting_locs.push_back(cv::Point2d(0,-25));
-	this->starting_locs.push_back(cv::Point2d(-25,0));
-
+	this->starting_locs.push_back(cv::Point2d(-15,-15));
+	this->starting_locs.push_back(cv::Point2d(15,15));
+	this->starting_locs.push_back(cv::Point2d(-15,15));
+	this->starting_locs.push_back(cv::Point2d(15,-15));
+	this->starting_locs.push_back(cv::Point2d(0,15));
+	this->starting_locs.push_back(cv::Point2d(15,0));
+	this->starting_locs.push_back(cv::Point2d(0,-15));
+	this->starting_locs.push_back(cv::Point2d(-15,0));
 	// reset randomization
 	srand(this->rand_seed);
+
 	if(this->test_environment_img.empty()){
 		this->make_obs_mat(); // create random obstacles
 	}
@@ -154,11 +179,14 @@ World::World(ros::NodeHandle nHandle){
 
 	// reset randomization
 	srand(this->rand_seed);
-
 	// initialize map, tasks, and agents
 	this->initialize_nodes_and_tasks();
+	// reset randomization
+	srand(this->rand_seed);
 	this->initialize_PRM();
 	// initialize agents
+	// reset randomization
+	srand(this->rand_seed);
 	this->initialize_agents(nHandle);
 	this->initialized = true;
 
@@ -201,7 +229,7 @@ void World::make_obs_mat(){
 	this->map_height_meters = 100.0;
 	this->Obs_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters), int(this->map_height_meters)), CV_8UC1);
 	this->Env_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters), int(this->map_height_meters)), CV_8UC3);
-
+	
 	this->obstacles.clear();
 	//ROS_INFO("DMCTS_World::World::make_obs_mat: making obstacles");
 	while(this->obstacles.size() < this->n_obstacles){
@@ -530,48 +558,49 @@ void World::display_world(const int &ms) {
 	// draw agents
 	for (int i = 0; i < this->n_agents; i++) {
 		// draw their location
-		cv::Point2d p1(this->agents[i]->get_pose()->get_x(), this->agents[i]->get_pose()->get_y());
-		p1.x = scale * (p1.x + this->map_width_meters/2); p1.y = scale * (p1.y + this->map_height_meters/2);
-		if(p1.x >= 0.0 && p1.x <= des_x && p1.y >= 0.0 && p1.y <= des_y){
-			cv::circle(map, p1, 8, this->agents[i]->get_color(), -1);
+		if(i == this->my_agent_index){
+			cv::Point2d p1(this->agents[i]->get_pose()->get_x(), this->agents[i]->get_pose()->get_y());
+			p1.x = scale * (p1.x + this->map_width_meters/2); p1.y = scale * (p1.y + this->map_height_meters/2);
+			if(p1.x >= 0.0 && p1.x <= des_x && p1.y >= 0.0 && p1.y <= des_y){
+				cv::circle(map, p1, 8, this->agents[i]->get_color(), -1);
+
+				// draw line to their edge x
+				if(this->agents[i]->get_edge_x() >= 0 && this->agents[i]->get_edge_x() <= this->n_nodes){
+					cv::Point2d p2 = this->nodes[this->agents[i]->get_edge_x()]->get_loc();
+					p2.x = scale * (p2.x + this->map_width_meters/2);
+					p2.y = scale * (p2.y + this->map_height_meters/2);
+					cv::line(map, p1, p2, this->agents[i]->get_color(), 2);
+				}
+
+				// draw line to their edge y
+				if(this->agents[i]->get_edge_y() >= 0 && this->agents[i]->get_edge_y() <= this->n_nodes){
+					cv::Point2d p3 = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
+					p3.x = scale * (p3.x + this->map_width_meters/2);
+					p3.y = scale * (p3.y + this->map_height_meters/2);
+					cv::line(map, p1, p3, this->agents[i]->get_color(), 2);
+				}
 		
-			// draw line to their edge x
-			if(this->agents[i]->get_edge_x() >= 0 && this->agents[i]->get_edge_x() <= this->n_nodes){		
-				cv::Point2d p2 = this->nodes[this->agents[i]->get_edge_x()]->get_loc();
-				p2.x = scale * (p2.x + this->map_width_meters/2);
-				p2.y = scale * (p2.y + this->map_height_meters/2);
-				cv::line(map, p1, p2, this->agents[i]->get_color(), 2);
-			}
-			
-			// draw line to their edge y
-			if(this->agents[i]->get_edge_y() >= 0 && this->agents[i]->get_edge_y() <= this->n_nodes){
-				cv::Point2d p3 = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
-				p3.x = scale * (p3.x + this->map_width_meters/2);
-				p3.y = scale * (p3.y + this->map_height_meters/2);
-				cv::line(map, p1, p3, this->agents[i]->get_color(), 2);
+				char text[10];
+				sprintf(text, "%i", i);
+				cv::putText(map, text, p1, CV_FONT_HERSHEY_COMPLEX, 1.0, this->agents[i]->get_color(), 3);
 			}
 
-			char text[10];
-			sprintf(text, "%i", i);
-			cv::putText(map, text, p1, CV_FONT_HERSHEY_COMPLEX, 1.0, this->agents[i]->get_color(), 3);
-		}
+			std::vector<int> a_path = this->agents[i]->get_path();
+			if(a_path.size() > 0){
+				cv::Point p_loc = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
+				p_loc.x = scale * (p_loc.x + this->map_width_meters/2); p_loc.y = scale * (p_loc.y + this->map_height_meters/2);
+				for(size_t j=1; j<a_path.size(); j++){
+					cv::Point p_cur = this->nodes[a_path[j]]->get_loc();
+					p_cur.x = scale * (p_cur.x + this->map_width_meters/2);
+					p_cur.y = scale * (p_cur.y + this->map_height_meters/2);
+					cv::Point p1(p_cur.x - 10*i, p_cur.y - 10*i);
+					cv::Point p2(p_loc.x - 10*i, p_loc.y - 10*i);
 
-		std::vector<int> a_path = this->agents[i]->get_path();
-		if(a_path.size() > 0){
-			cv::Point p_loc = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
-			p_loc.x = scale * (p_loc.x + this->map_width_meters/2); p_loc.y = scale * (p_loc.y + this->map_height_meters/2);
-			for(size_t j=1; j<a_path.size(); j++){
-				cv::Point p_cur = this->nodes[a_path[j]]->get_loc();
-				p_cur.x = scale * (p_cur.x + this->map_width_meters/2);
-				p_cur.y = scale * (p_cur.y + this->map_height_meters/2);
-				cv::Point p1(p_cur.x - 10*i, p_cur.y - 10*i);
-				cv::Point p2(p_loc.x - 10*i, p_loc.y - 10*i);
-
-				cv::arrowedLine(map, p2, p1, this->agents[i]->get_color(), 4);
-				p_loc = p_cur;
+					cv::arrowedLine(map, p2, p1, this->agents[i]->get_color(), 4);
+					p_loc = p_cur;
+				}
 			}
 		}
-
 	}
 	
 	cv::putText(map, this->task_selection_method, cv::Point2d(40.0, des_y + 30.0), CV_FONT_HERSHEY_COMPLEX, 1.0, white, 3);
@@ -644,7 +673,7 @@ void World::initialize_agents(ros::NodeHandle nHandle) {
 		if(i == this->my_agent_index){
 			actual_agent = true;
 		}
-		Agent* a = new Agent(nHandle, i, tp, this->agent_cruising_speed, agent_colors[tp], agent_obstacle_costs[tp], agent_work_radii[tp], actual_agent, this, this->desired_alt);
+		Agent* a = new Agent(nHandle, i, this->my_agent_type, this->agent_cruising_speed, agent_colors[tp], agent_obstacle_costs[tp], agent_work_radii[tp], actual_agent, this, this->desired_alt);
 		this->agents.push_back(a);
 		actual_agent = false;
 	}
@@ -665,7 +694,7 @@ void World::initialize_PRM() {
 			double d;
 			if (this->dist_between_nodes(i, j, d)) {
 				if (d < this->k_connection_radius && rand() < this->p_connect) { // am I close enough?
-
+	
 					// set normal nbr and travel
 					double obs_cost = this->find_obstacle_costs(i,j,d);
 					this->nodes[i]->add_nbr(j, d, obs_cost);
@@ -867,12 +896,28 @@ void World::initialize_nodes_and_tasks() {
 
 		// set task times
 		std::vector<double> at;
-		for (int a = 0; a < this->n_agent_types; a++) {
-			if (this->rand_double_in_range(0.0, 1.0) < this->p_impossible_task) {
-				at.push_back(double(INFINITY));
+		if(this->hardware_trial){ // for search and rescue
+			if(t==0){
+				// open field task
+				at.push_back(1000000.0);
+				at.push_back(1000000.0);
+
 			}
-			else {
-				at.push_back(this->rand_double_in_range(this->min_agent_work, this->max_agent_work));
+			else{
+				// obstacle task
+				at.push_back(1000000.0); // low flying agents can see
+				at.push_back(0.0); // high flying agents can not
+			}
+		}
+		else{
+			// random trials
+			for (int a = 0; a < this->n_agent_types; a++) {
+				if (this->rand_double_in_range(0.0, 1.0) < this->p_impossible_task) {
+					at.push_back(double(INFINITY));
+				}
+				else {
+					at.push_back(this->rand_double_in_range(this->min_agent_work, this->max_agent_work));
+				}
 			}
 		}
 		task_work_by_agent.push_back(at);
@@ -884,17 +929,33 @@ void World::initialize_nodes_and_tasks() {
 		Map_Node* n = new Map_Node(this->starting_locs[i].x, this->starting_locs[i].y, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
 		this->nodes.push_back(n);
 	}
-	for(int i=int(this->nodes.size()); i < this->n_nodes; i++){
+
+	int obs_threshold = 50;
+	if(this->hardware_trial){
+		obs_threshold = 255;
+	}
+
+	for(int i=int(this->nodes.size()); i < this->n_nodes; i++) {
 		bool flag = true;
+
 		while(flag){
 			x = this->rand_double_in_range(-this->map_width_meters/2.1, this->map_width_meters/2.1);
 			y = this->rand_double_in_range(-this->map_height_meters/2.1, this->map_height_meters/2.1);
 
-			if(this->Obs_Mat.at<uchar>(cv::Point(x + this->map_width_meters/2,y+this->map_height_meters/2)) <= 50){
+			if(this->Obs_Mat.at<uchar>(cv::Point(x + this->map_width_meters/2,y+this->map_height_meters/2)) <= obs_threshold){
 				flag = false;
 			}
 		}
+
 		int task_type = rand() % n_task_types;
+		if(this->hardware_trial){
+			if(this->Obs_Mat.at<uchar>(cv::Point(x + this->map_width_meters/2,y+this->map_height_meters/2)) <= 50){
+				task_type = 0; // open field task
+			}
+			else{
+				task_type = 1; // obstacle task
+			}
+		}
 		Map_Node* n = new Map_Node(x, y, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
 		this->nodes.push_back(n);
 	}
