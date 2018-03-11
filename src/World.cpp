@@ -106,7 +106,7 @@ World::World(ros::NodeHandle nHandle){
 	this->plot_duration = ros::Duration(1); 
 	this->plot_timer = nHandle.createTimer(this->plot_duration, &World::plot_timer_callback, this);
 
-	ROS_WARN("	Recieved RAND_SEED from param server: %i", this->rand_seed);
+	ROS_INFO("   Recieved RAND_SEED from param server: %i", this->rand_seed);
 
 
 	// time stuff
@@ -128,7 +128,6 @@ World::World(ros::NodeHandle nHandle){
 		}
 	}
 
-	ROS_INFO("DMCTS::Word::World(): map size: %0.2f, %0.2f (meters)", this->map_width_meters, this->map_height_meters);
 	this->n_obstacles = 10;
 	this->k_map_connections = 5;
 	this->k_connection_radius = 10.0;
@@ -136,7 +135,6 @@ World::World(ros::NodeHandle nHandle){
 	this->p_blocked_edge = 0.05;
 	this->p_obstacle_on_edge = 0.2;
 	this->p_pay_obstacle_cost = 0.0;
-	
 	// task stuff
 	this->p_impossible_task = 0.0; // how likely is it that an agent is created that cannot complete a task
 	this->p_activate_task = 0.0;// 1.0*this->dt; // how likely is it that I will activate a task each second? *dt accounts per iters per second
@@ -146,13 +144,11 @@ World::World(ros::NodeHandle nHandle){
 	this->max_task_work = 1.0;
 	this->min_task_reward = 100.0;
 	this->max_task_reward = 500.0;
-
 	// agent stuff
 	this->min_travel_vel = 2.3; // 5 - slowest travel speed
 	this->max_travel_vel = 2.7; // 25 - fastest travel speed
 	this->min_agent_work = 100.0; // min amount of work an agent does per second
 	this->max_agent_work = 100.0; // max amount of work an agent does per second
-
 	// agent starting locations
 	this->starting_locs.push_back(cv::Point2d(-15,-15));
 	this->starting_locs.push_back(cv::Point2d(15,15));
@@ -162,6 +158,7 @@ World::World(ros::NodeHandle nHandle){
 	this->starting_locs.push_back(cv::Point2d(15,0));
 	this->starting_locs.push_back(cv::Point2d(0,-15));
 	this->starting_locs.push_back(cv::Point2d(-15,0));
+	ROS_ERROR("DMCTS::World::World(): set start locs");
 	// reset randomization
 	srand(this->rand_seed);
 
@@ -171,28 +168,33 @@ World::World(ros::NodeHandle nHandle){
 	else{
 		this->seed_obs_mat(); // seed into cells satelite information
 	}
+	ROS_ERROR("DMCTS::World::World(): created obs mat");
 	cv::Mat s = cv::Mat::zeros(this->Obs_Mat.size(), CV_16S);
 	for(int i=0; i<this->inflation_iters; i++){
 		cv::blur(this->Obs_Mat,s,cv::Size(5,5));
 		cv::max(this->Obs_Mat,s,this->Obs_Mat);
 	}
-
+	ROS_ERROR("DMCTS::World::World(): inflated obs mat");
 	// reset randomization
 	srand(this->rand_seed);
 	// initialize map, tasks, and agents
 	this->initialize_nodes_and_tasks();
+	ROS_ERROR("DMCTS::World::World(): initialized nodes and tasks");
 	// reset randomization
 	srand(this->rand_seed);
 	this->initialize_PRM();
+	ROS_ERROR("DMCTS::World::World(): initialized PRM");
 	// initialize agents
 	// reset randomization
 	srand(this->rand_seed);
 	this->initialize_agents(nHandle);
+	ROS_ERROR("DMCTS::World::World(): initialized agents");
 	this->initialized = true;
 
 	if(this->show_display){
 		this->display_world(100);
 	}
+	ROS_ERROR("DMCTS::World::World(): exiting");
 }
 
 double World::get_task_reward_at_time(const int &task_index, const double &time){
