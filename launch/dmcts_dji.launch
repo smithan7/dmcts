@@ -16,8 +16,8 @@
   
   <group ns="dmcts_$(arg agent_index)">
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
-    <!--include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/-->
-    <!--include file="$(find my_quad_controller)/launch/dji_controller.launch"/-->
+    <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
+    <include file="$(find my_quad_controller)/launch/dji_controller.launch"/>
     
     <group if="$(arg use_xbee)">
         <param name="com_port" value="/dev/ttyUSB0"/>

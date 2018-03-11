@@ -158,7 +158,6 @@ World::World(ros::NodeHandle nHandle){
 	this->starting_locs.push_back(cv::Point2d(15,0));
 	this->starting_locs.push_back(cv::Point2d(0,-15));
 	this->starting_locs.push_back(cv::Point2d(-15,0));
-	ROS_ERROR("DMCTS::World::World(): set start locs");
 	// reset randomization
 	srand(this->rand_seed);
 
@@ -168,33 +167,27 @@ World::World(ros::NodeHandle nHandle){
 	else{
 		this->seed_obs_mat(); // seed into cells satelite information
 	}
-	ROS_ERROR("DMCTS::World::World(): created obs mat");
 	cv::Mat s = cv::Mat::zeros(this->Obs_Mat.size(), CV_16S);
 	for(int i=0; i<this->inflation_iters; i++){
 		cv::blur(this->Obs_Mat,s,cv::Size(5,5));
 		cv::max(this->Obs_Mat,s,this->Obs_Mat);
 	}
-	ROS_ERROR("DMCTS::World::World(): inflated obs mat");
 	// reset randomization
 	srand(this->rand_seed);
 	// initialize map, tasks, and agents
 	this->initialize_nodes_and_tasks();
-	ROS_ERROR("DMCTS::World::World(): initialized nodes and tasks");
 	// reset randomization
 	srand(this->rand_seed);
 	this->initialize_PRM();
-	ROS_ERROR("DMCTS::World::World(): initialized PRM");
 	// initialize agents
 	// reset randomization
 	srand(this->rand_seed);
 	this->initialize_agents(nHandle);
-	ROS_ERROR("DMCTS::World::World(): initialized agents");
 	this->initialized = true;
 
 	if(this->show_display){
 		this->display_world(100);
 	}
-	ROS_ERROR("DMCTS::World::World(): exiting");
 }
 
 double World::get_task_reward_at_time(const int &task_index, const double &time){
