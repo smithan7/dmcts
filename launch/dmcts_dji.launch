@@ -1,0 +1,36 @@
+
+<launch>
+  <arg name="agent_index"/>
+  <arg name="agent_type"/>
+  <arg name="desired_altitude"/>
+  <arg name="pay_obstacle_costs"/>
+  <arg name="cruising_speed"/>
+  <arg name="use_hector_quad"/>
+  <arg name="use_xbee"/>
+
+  <param name="agent_index" value="$(arg agent_index)"/>
+  <param name="agent_type" value="$(arg agent_type)"/>
+  <param name="desired_altitude" type="double" value="$(arg desired_altitude)"/>
+  <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
+  <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
+  
+  <group ns="dmcts_$(arg agent_index)">
+        
+    <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
+    <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
+    <include file="$(find my_quad_controller)/launch/pid_controller.launch"/>
+    
+    <group if="$(arg use_xbee)">
+        <param name="com_port" value="/dev/ttyUSB0"/>
+        <param name="baud_rate" value="9600"/>
+        <param name="com_type" value="agent"/>
+        <param name="fake_agent" type="bool" value="true"/>
+        <param name="agent_index" value="$(arg agent_index)"/>
+        
+        <node pkg="xbee_bridge" name="xbee_bridge" type="xbee_bridge.py"/>
+    </group>
+    
+  </group>
+
+
+</launch>
