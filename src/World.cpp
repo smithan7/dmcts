@@ -167,7 +167,7 @@ World::World(ros::NodeHandle nHandle){
 	else{
 		this->seed_obs_mat(); // seed into cells satelite information
 	}
-	cv::Mat s = cv::Mat::zeros(this->Obs_Mat.size(), CV_16S);
+	cv::Mat s = cv::Mat::zeros(this->Obs_Mat.size(), CV_8UC1);
 	for(int i=0; i<this->inflation_iters; i++){
 		cv::blur(this->Obs_Mat,s,cv::Size(5,5));
 		cv::max(this->Obs_Mat,s,this->Obs_Mat);
