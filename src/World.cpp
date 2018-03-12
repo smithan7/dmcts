@@ -55,6 +55,10 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/speed_penalty", speed_penalty);
 	ros::param::get("/n_task_types", this->n_task_types);
 	ros::param::get("/n_agent_types", this->n_agent_types);
+	
+   	this->test_obstacle_img = this->world_directory + this->test_obstacle_img;
+    this->test_environment_img = this->world_directory + this->test_environment_img;
+    this->world_directory = this->world_directory + "/worlds/";
 
 	ROS_INFO("World::initializing agent's world");
 	ROS_INFO("   test_environment_img %s", this->test_environment_img.c_str());
@@ -84,6 +88,8 @@ World::World(ros::NodeHandle nHandle){
 	ROS_INFO("   south_lat %0.6f", this->south_lat);
 	ROS_INFO("   west_lon %0.6f", this->west_lon);
 	ROS_INFO("   east_lon %0.6f", this->east_lon);
+	ROS_INFO("   origin_lat %0.6f", (this->north_lat + this->south_lat)/2.0);
+	ROS_INFO("   origin_lon %0.6f", (this->west_lon + this->east_lon)/2.0);
 	ROS_INFO("   inflation_iters %i", this->inflation_iters);
 	ROS_INFO("   obstacle_increase %0.2f", this->obstacle_increase);
 	ROS_INFO("   show display %i", this->show_display);
@@ -113,9 +119,14 @@ World::World(ros::NodeHandle nHandle){
 	this->c_time = 0.0;
 	this->end_time = end_time;
 
-	// map and PRM stuff
+	if(this->test_obstacle_img.empty()){
+    	this->map_width_meters = 100.0;
+	    this->map_height_meters = 100.0;
+	}
+	else{
 	this->map_width_meters = this->get_global_distance(this->north_lat, this->west_lon, this->north_lat, this->east_lon);
-	this->map_height_meters = this->get_global_distance(this->north_lat, this->west_lon, this->south_lat, this->west_lon);
+	    this->map_height_meters = this->get_global_distance(this->north_lat, this->west_lon, this->south_lat, this->west_lon);
+	}
 
 	if(this->use_gazebo){
 		if(this->map_width_meters > this->map_height_meters){
@@ -127,7 +138,7 @@ World::World(ros::NodeHandle nHandle){
 			this->map_height_meters = 90.0;
 		}
 	}
-
+    ROS_INFO("DMCTS_world_node::   Word::World(): map size: %0.2f, %0.2f (meters)", this->map_width_meters, this->map_height_meters);
 	this->n_obstacles = 10;
 	this->k_map_connections = 5;
 	this->k_connection_radius = 10.0;
@@ -167,6 +178,7 @@ World::World(ros::NodeHandle nHandle){
 	else{
 		this->seed_obs_mat(); // seed into cells satelite information
 	}
+	ROS_INFO("DMCTS_world_node::   Word::World(): mat size: %i, %i (cells)", this->Obs_Mat.cols, this->Obs_Mat.rows);
 	cv::Mat s = cv::Mat::zeros(this->Obs_Mat.size(), CV_8UC1);
 	for(int i=0; i<this->inflation_iters; i++){
 		cv::blur(this->Obs_Mat,s,cv::Size(5,5));
