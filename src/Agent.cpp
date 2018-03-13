@@ -594,25 +594,8 @@ bool Agent::act() {
 	//ROS_INFO("Agent[%i]::act: in", this->index);
 	// am  I at a node?
 	//ROS_WARN("Agent[%i]::act: on edge: %i -> %i", this->index, this->edge.x, this->edge.y);
-	bool an = false;
-	if (this->at_node(this->edge.x)){
-		// if my current node is active
-		if(this->world->get_nodes()[this->edge.x]->is_active()){
-			this->publish_work_request(this->edge.x); // send service to request work
-			this->work_done +=  this->world->get_nodes()[this->edge.x]->get_acted_upon(this); // work on my goal
-		}
-		an = true;
-	}
-	if(this->at_node(this->edge.y)) {
-		an = true;
-		// if my current node is active
-		if(this->world->get_nodes()[this->edge.y]->is_active()){
-			this->publish_work_request(this->edge.y); // send service to request work
-			this->work_done +=  this->world->get_nodes()[this->edge.y]->get_acted_upon(this); // work on my goal
-		}
-	}
 
-	if(an){
+	if(this->at_node(this->edge.y) || this->at_node(this->edge.x)){
 		//ROS_INFO("Agent[%i]::act: at node", this->index);
 		// I am at a node, am I at my goal and is it active still?
 		if (this->at_node(this->goal_node->get_index()) && this->world->get_nodes()[this->goal_node->get_index()]->is_active()) {

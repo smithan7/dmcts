@@ -1107,8 +1107,8 @@ void Agent_Planning::select_greedy_task_by_completion_reward() {
 	int max_index = -1;
 	double max_arrival_time = 0.0;
 	double max_completion_time = 0.0;
-	double max_arr_reward = -double(INFINITY);
-	double max_comp_reward = -double(INFINITY);
+	double max_arr_reward = 0.0;
+	double max_comp_reward = 0.0;
 	bool need_path = false;
 
 	//std::cerr << "world n_nodes: " << this->world->get_n_nodes() << std::endl;
