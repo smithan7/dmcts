@@ -87,7 +87,7 @@ private:
 	std::vector<double> max_task_rewards, min_task_rewards;
 	std::vector<double> max_task_times, min_task_times;
 	std::vector<double> max_task_works, min_task_works;
-	std::vector<cv::Point2d> starting_locs;
+	std::vector<double> starting_xs, starting_ys;
 	cv::Mat travel_distances, obstacle_distances;
 	int n_obstacles;
 	
