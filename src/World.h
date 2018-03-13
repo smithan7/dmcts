@@ -124,8 +124,8 @@ private:
 	
 	cv::Mat Obs_Mat, Env_Mat;
 	std::vector< std::vector<double> > obstacles;
-	void make_obs_mat();
-	void seed_obs_mat();
+	void create_obs_mat();
+	void get_obs_mat();
 	int inflation_iters;
 	double get_global_distance(const double &lata, const double &lona, const double &latb, const double &lonb);
 	double find_obstacle_costs(const int &i, const int &j, const double &free_dist);
