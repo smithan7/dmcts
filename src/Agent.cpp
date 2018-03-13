@@ -395,7 +395,9 @@ void Agent::publish_to_control_script(const int &ni){
 void Agent::publish_work_request(const int &goal_node ){
 	custom_messages::DMCTS_Request_Work msg;
 	msg.n_index = goal_node;
+	msg.a_type = this->type;
 	msg.a_index = this->index;
+	//ROS_WARN("Agent::publish_work_request: my agent_index: %i", msg.a_type);
 	this->request_work_pub.publish(msg);
 }
 
