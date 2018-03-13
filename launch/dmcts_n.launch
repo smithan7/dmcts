@@ -1,18 +1,10 @@
 
 <launch>
   <arg name="agent_index"/>
-  <arg name="agent_type"/>
-  <arg name="desired_altitude"/>
-  <arg name="pay_obstacle_costs"/>
-  <arg name="cruising_speed"/>
   <arg name="use_hector_quad"/>
   <arg name="use_xbee"/>
 
   <param name="agent_index" value="$(arg agent_index)"/>
-  <param name="agent_type" value="$(arg agent_type)"/>
-  <param name="desired_altitude" type="double" value="$(arg desired_altitude)"/>
-  <param name="pay_obstacle_costs" type="bool" value="$(arg pay_obstacle_costs)"/>
-  <param name="cruising_speed" type="double" value="$(arg cruising_speed)"/>
   
   <group ns="dmcts_$(arg agent_index)">
         

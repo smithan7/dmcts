@@ -20,6 +20,9 @@
 World::World(ros::NodeHandle nHandle){
 
 	double speed_penalty;
+	std::vector<bool> team_pay_obstacle_costs;
+	std::vector<int> agent_types;
+	std::vector<double> cruising_speeds, agent_altitudes;
 	ros::param::get("/test_environment_img", this->test_environment_img);
 	ros::param::get("/test_obstacle_img", this->test_obstacle_img);
 	ros::param::get("/agent_index", this->my_agent_index);
@@ -29,10 +32,10 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/number_of_nodes", this->n_nodes);
 	ros::param::get("/number_of_agents", this->n_agents);
 	ros::param::get("/coord_method", this->task_selection_method);
-	ros::param::get("/desired_altitude", this->desired_alt);
+	ros::param::get("/agent_altitudes", agent_altitudes);
 	ros::param::get("/p_task_initially_active", this->p_task_initially_active);
-	ros::param::get("/pay_obstacle_costs", this->pay_obstacle_cost);
-	ros::param::get("/cruising_speed", this->agent_cruising_speed);
+	ros::param::get("/pay_obs_costs", team_pay_obstacle_costs);
+	ros::param::get("/cruising_speeds", cruising_speeds);
 	ros::param::get("/use_gazebo", this->use_gazebo);
 	ros::param::get("/alpha", this->alpha);
 	ros::param::get("/beta", this->beta);
@@ -50,13 +53,18 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/obstacle_increase", this->obstacle_increase);
 	ros::param::get("/agent_display_map", this->show_display);
 	ros::param::get("/hardware_trial", this->hardware_trial);
-	ros::param::get("/agent_type", this->my_agent_type);
+	ros::param::get("/agent_types", agent_types);
 	ros::param::get("/flat_tasks", this->flat_tasks);
 	ros::param::get("/speed_penalty", speed_penalty);
 	ros::param::get("/n_task_types", this->n_task_types);
 	ros::param::get("/n_agent_types", this->n_agent_types);
 	ros::param::get("/starting_xs", this->starting_xs);
 	ros::param::get("/starting_ys", this->starting_ys);
+	
+	this->agent_cruising_speed = cruising_speeds[this->my_agent_index];
+	this->desired_alt = agent_altitudes[this->my_agent_index];
+	this->pay_obstacle_cost = team_pay_obstacle_costs[this->my_agent_index];
+	this->my_agent_type = agent_types[this->my_agent_index];
 	
    	this->test_obstacle_img = this->world_directory + this->test_obstacle_img;
     this->test_environment_img = this->world_directory + this->test_environment_img;
