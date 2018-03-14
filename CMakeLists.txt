@@ -18,8 +18,11 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## include opencv
-#find_package(OpenCV 2 REQUIRED)
-find_package(OpenCV 3.2.0 REQUIRED COMPONENTS core highgui imgproc imgcodecs)
+if($ENV{USER} MATCHES "nvidia")
+    find_package(OpenCV 2 REQUIRED)
+else()
+    find_package(OpenCV 3.2.0 REQUIRED COMPONENTS core highgui imgproc imgcodecs)
+endif()
 #include_directories(${OpenCV_INCLUDE_DIRS})
 
 ## System dependencies are found with CMake's conventions
