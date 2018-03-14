@@ -19,8 +19,8 @@
         <param name="com_type" value="agent"/>
         <param name="fake_agent" type="bool" value="true"/>
         <param name="agent_index" value="$(arg agent_index)"/>
-        
-        <node pkg="xbee_bridge" name="xbee_bridge" type="xbee_bridge.py"/>
+        <include file="$(find xbee_bridge)/launch/xbee_bridge.launch"/>
+        <!--node pkg="xbee_bridge" name="xbee_bridge" type="xbee_bridge.py"/-->
     </group>
     
   </group>
