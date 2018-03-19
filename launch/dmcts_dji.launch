@@ -6,7 +6,7 @@
 
   
   <group ns="dmcts_$(arg agent_index)">
-    <remap from="/uav$(arg agent_index)/ground_truth/state" to="/local/odom"/>
+    <remap from="/uav$(arg agent_index)/ground_truth/state" to="/global/odom"/>
     <node pkg="dmcts" name="dmcts" type="dmcts" output="screen"/>
     <include file="$(find costmap_bridge)/launch/costmap_bridge_launch.launch"/>
 	<include file="$(find gps_to_local_bridge)/launch/gps_to_local.launch"/>    
