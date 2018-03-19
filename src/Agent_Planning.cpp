@@ -68,7 +68,7 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 		//ROS_INFO("Agent_Planning::D_MCTS_task_by_completion_reward: out of search on edge %i -> %i", this->agent->get_edge().x, this->agent->get_edge().y);
 	}
 
-	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: planning_iters: %i", planning_iter);
+	ROS_INFO("Agent_Planning::D_MCTS_task_selection: planning_iters: %i", planning_iter);
 
 	//ROS_INFO("Agent_Planning::D_MCTS_task_selection: finished searching tree for %i iters", planning_iter);
 	this->cumulative_planning_iters += planning_iter;
