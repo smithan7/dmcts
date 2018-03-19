@@ -182,6 +182,7 @@ bool Agent_Coordinator::advertise_task_claim(World* world) {
 
 	double prob_taken = 1.0;
 	if (this->task_claim_method.compare("greedy") == 0) {
+		this->reset_prob_actions();
 		prob_taken = 0.99;
 	}
 	else {
