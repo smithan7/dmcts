@@ -19,7 +19,7 @@
 
 World::World(ros::NodeHandle nHandle){
 
-	double speed_penalty;
+	double speed_penalty, inflation_box_size_meters;
 	std::vector<bool> team_pay_obstacle_costs;
 	std::vector<int> agent_types;
 	std::vector<double> cruising_speeds, agent_altitudes;
@@ -50,6 +50,9 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/east_lon", this->east_lon);
 	ros::param::get("/west_lon", this->west_lon);
 	ros::param::get("/inflation_iters", this->inflation_iters);
+	ros::param::get("/inflation_sigma", this->inflation_sigma);
+	ros::param::get("/meters_per_cell", this->meters_per_cell);
+	ros::param::get("/inflation_box_size_meters", inflation_box_size_meters);
 	ros::param::get("/obstacle_increase", this->obstacle_increase);
 	ros::param::get("/agent_display_map", this->show_display);
 	ros::param::get("/hardware_trial", this->hardware_trial);
@@ -60,6 +63,7 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/n_agent_types", this->n_agent_types);
 	ros::param::get("/starting_xs", this->starting_xs);
 	ros::param::get("/starting_ys", this->starting_ys);
+	ros::param::get("/node_obstacle_threshold", this->node_obstacle_threshold);
 	
 	this->agent_cruising_speed = cruising_speeds[this->my_agent_index];
 	this->desired_alt = agent_altitudes[this->my_agent_index];
@@ -69,6 +73,9 @@ World::World(ros::NodeHandle nHandle){
    	this->test_obstacle_img = this->world_directory + this->test_obstacle_img;
     this->test_environment_img = this->world_directory + this->test_environment_img;
     this->world_directory = this->world_directory + "/worlds/";
+
+    this->cells_per_meter = 1.0 / this->meters_per_cell;
+    this->inflation_box_size = inflation_box_size_meters * this->cells_per_meter;
 
 	ROS_INFO("World::initializing agent's world");
 	ROS_INFO("   test_environment_img %s", this->test_environment_img.c_str());
@@ -101,6 +108,11 @@ World::World(ros::NodeHandle nHandle){
 	ROS_INFO("   origin_lat %0.6f", (this->north_lat + this->south_lat)/2.0);
 	ROS_INFO("   origin_lon %0.6f", (this->west_lon + this->east_lon)/2.0);
 	ROS_INFO("   inflation_iters %i", this->inflation_iters);
+	ROS_INFO("   inflation_box_size_meters %0.2f", inflation_box_size_meters);
+	ROS_INFO("   inflation_box_size %0.2f", this->inflation_box_size);
+	ROS_INFO("   inflation_sigma %0.2f", this->inflation_sigma);
+	ROS_INFO("   meters_per_cell %0.2f", this->meters_per_cell);
+	ROS_INFO("   cells_per_meter %0.2f", this->cells_per_meter);
 	ROS_INFO("   obstacle_increase %0.2f", this->obstacle_increase);
 	ROS_INFO("   show display %i", this->show_display);
 	ROS_INFO("   hardware_trial %i", this->hardware_trial);
@@ -176,6 +188,8 @@ World::World(ros::NodeHandle nHandle){
 	// reset randomization
 	srand(this->rand_seed);
 	this->get_obs_mat(); // create random / or load obstacles
+	this->map_width_cells = this->Obs_Mat.cols;
+	this->map_height_cells = this->Obs_Mat.rows;
 	ROS_INFO("DMCTS::   Word::World(): mat size: %i, %i (cells)", this->Obs_Mat.cols, this->Obs_Mat.rows);
 
 	// reset randomization
@@ -202,8 +216,8 @@ double World::get_task_reward_at_time(const int &task_index, const double &time)
 
 void World::get_obs_mat(){
 
-	this->Obs_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters), int(this->map_height_meters)), CV_8UC1);
-	this->Env_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters), int(this->map_height_meters)), CV_8UC3);
+	this->Obs_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters*this->cells_per_meter), int(this->map_height_meters*this->cells_per_meter)), CV_8UC1);
+	this->Env_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters*this->cells_per_meter), int(this->map_height_meters*this->cells_per_meter)), CV_8UC3);
 
 	cv::Mat temp_obs = cv::imread(this->test_obstacle_img, CV_LOAD_IMAGE_GRAYSCALE);
 	cv::Mat temp_env = cv::imread(this->test_environment_img, CV_LOAD_IMAGE_COLOR);
@@ -225,15 +239,18 @@ void World::get_obs_mat(){
 		cv::resize(temp_env, this->Env_Mat, this->Env_Mat.size());
 	}
 
-
 	cv::Mat s = cv::Mat::zeros(this->Obs_Mat.size(), CV_8UC1);
 	for(int i=0; i<this->inflation_iters; i++){
-		cv::blur(this->Obs_Mat,s,cv::Size(5,5));
+		cv::GaussianBlur(this->Obs_Mat,s,cv::Size(this->inflation_box_size, this->inflation_box_size), this->inflation_sigma, this->inflation_sigma);
 		cv::max(this->Obs_Mat,s,this->Obs_Mat);
 	}
 
-	//cv::namedWindow("DMCTS_World::World::seed_obs_mat:Obstacles", cv::WINDOW_NORMAL);
-	//cv::imshow("DMCTS_World::World::seed_obs_mat:Obstacles", this->Env_Mat);
+	cv::namedWindow("DMCTS::World::seed_obs_mat:Obstacles", cv::WINDOW_NORMAL);
+	cv::imshow("DMCTS::World::seed_obs_mat:Obstacles", this->Obs_Mat);
+	cv::waitKey(10);
+
+	//cv::namedWindow("DMCTS_World::World::seed_obs_mat:Env_Mat", cv::WINDOW_NORMAL);
+	//cv::imshow("DMCTS_World::World::seed_obs_mat:Env_Mat", this->Env_Mat);
 	//cv::waitKey(0);
 }
 
@@ -241,8 +258,8 @@ void World::create_obs_mat(){
 
 	this->map_width_meters = 100.0;
 	this->map_height_meters = 100.0;
-	this->Obs_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters), int(this->map_height_meters)), CV_8UC1);
-	this->Env_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters), int(this->map_height_meters)), CV_8UC3);
+	this->Obs_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters*this->cells_per_meter), int(this->map_height_meters*this->cells_per_meter)), CV_8UC1);
+	this->Env_Mat = cv::Mat::zeros(cv::Size(int(this->map_width_meters*this->cells_per_meter), int(this->map_height_meters*this->cells_per_meter)), CV_8UC3);
 	
 	this->obstacles.clear();
 	//ROS_INFO("DMCTS_World::World::make_obs_mat: making obstacles");
@@ -487,15 +504,15 @@ void World::display_world(const int &ms) {
 
 	double des_x, des_y, scale;
 
-	if(this->map_width_meters > this->map_height_meters){
+	if(this->map_width_cells > this->map_height_cells){
 		des_x = 1000.0;
-		scale = des_x / this->map_width_meters;
-		des_y = this->map_height_meters * scale;
+		scale = des_x / this->map_width_cells;
+		des_y = this->map_height_cells * scale;
 	}
 	else{
 		des_y = 1000.0;
-		scale = des_y / this->map_height_meters;
-		des_x = this->map_width_meters * scale;
+		scale = des_y / this->map_height_cells;
+		des_x = this->map_width_cells * scale;
 	}
 
 	//ROS_INFO("have des: %.2f and %.2f", des_x, des_y);
@@ -519,10 +536,10 @@ void World::display_world(const int &ms) {
 						cv::Scalar pink(uchar(255.0*(1.0 - ratio)), uchar(255.0*(1.0 - ratio)), 255);
 						cv::Point2d p1 = this->nodes[i]->get_loc();
 						cv::Point2d p2 = this->nodes[index]->get_loc();
-						p1.x = scale * (p1.x + this->map_width_meters/2.0);
-						p1.y = scale * (p1.y + this->map_height_meters/2.0);
-						p2.x = scale * (p2.x + this->map_width_meters/2.0);
-						p2.y = scale * (p2.y + this->map_height_meters/2.0);
+						p1.x = scale * (p1.x + this->map_width_cells/2.0);
+						p1.y = scale * (p1.y + this->map_height_cells/2.0);
+						p2.x = scale * (p2.x + this->map_width_cells/2.0);
+						p2.y = scale * (p2.y + this->map_height_cells/2.0);
 						cv::line(this->PRM_Mat, p1, p2, pink, 2);
 					}
 				}
@@ -532,8 +549,16 @@ void World::display_world(const int &ms) {
 		// draw nodes
 		for (int i = 0; i < this->n_nodes; i++) {
 			cv::Point2d p1 = this->nodes[i]->get_loc();
-			p1.x = scale * (p1.x + this->map_width_meters/2.0);
-			p1.y = scale * (p1.y + this->map_height_meters/2.0);
+
+			//ROS_WARN("p: %0.2f, %0.2f", p1.x + this->map_width_cells/2.0, p1.y + this->map_height_cells/2.0);
+			//cv::Mat a = this->Obs_Mat.clone();
+			//cv::circle(a, cv::Point(p1.x + this->map_width_cells/2.0, p1.y + this->map_height_cells/2.0), 10.0, cv::Scalar(127), -1);
+			//cv::namedWindow("Playing", cv::WINDOW_NORMAL);
+			//cv::imshow("Playing", a);
+			//cv::waitKey(0);
+
+			p1.x = scale * (p1.x + this->map_width_cells/2.0);
+			p1.y = scale * (p1.y + this->map_height_cells/2.0);
 			cv::circle(this->PRM_Mat, p1, 5, blue, -1);
 		}
 
@@ -541,8 +566,8 @@ void World::display_world(const int &ms) {
 		for (int i = 0; i < this->n_nodes; i++) {
 			double d = -5.0;
 			cv::Point2d p1 = this->nodes[i]->get_loc();
-			p1.x = scale * (p1.x + this->map_width_meters/2);
-			p1.y = scale * (p1.y + this->map_height_meters/2);
+			p1.x = scale * (p1.x + this->map_width_cells/2);
+			p1.y = scale * (p1.y + this->map_height_cells/2);
 			cv::Point2d tl = cv::Point2d(p1.x - d, p1.y + d);
 			char text[10];
 			sprintf(text, "%i", i);
@@ -561,8 +586,8 @@ void World::display_world(const int &ms) {
 		if (this->nodes[i]->is_active()) {
 			double d = 15.0;
 			cv::Point2d p1 = this->nodes[i]->get_loc();
-			p1.x = scale * (p1.x + this->map_width_meters/2);
-			p1.y = scale * (p1.y + this->map_height_meters/2);
+			p1.x = scale * (p1.x + this->map_width_cells/2);
+			p1.y = scale * (p1.y + this->map_height_cells/2);
 			cv::Point2d tl = cv::Point2d(p1.x - d, p1.y + d);
 			cv::Point2d br = cv::Point2d(p1.x + d, p1.y - d);
 			cv::rectangle(map, cv::Rect(tl, br), this->nodes[i]->get_color(), -1);
@@ -574,23 +599,24 @@ void World::display_world(const int &ms) {
 		// draw their location
 		if(i == this->my_agent_index){
 			cv::Point2d p1(this->agents[i]->get_pose()->get_x(), this->agents[i]->get_pose()->get_y());
-			p1.x = scale * (p1.x + this->map_width_meters/2); p1.y = scale * (p1.y + this->map_height_meters/2);
+			p1.x = scale * (p1.x + this->map_width_cells/2);
+			p1.y = scale * (p1.y + this->map_height_cells/2);
 			if(p1.x >= 0.0 && p1.x <= des_x && p1.y >= 0.0 && p1.y <= des_y){
 				cv::circle(map, p1, 8, this->agents[i]->get_color(), -1);
 
 				// draw line to their edge x
 				if(this->agents[i]->get_edge_x() >= 0 && this->agents[i]->get_edge_x() <= this->n_nodes){
 					cv::Point2d p2 = this->nodes[this->agents[i]->get_edge_x()]->get_loc();
-					p2.x = scale * (p2.x + this->map_width_meters/2);
-					p2.y = scale * (p2.y + this->map_height_meters/2);
+					p2.x = scale * (p2.x + this->map_width_cells/2);
+					p2.y = scale * (p2.y + this->map_height_cells/2);
 					cv::line(map, p1, p2, this->agents[i]->get_color(), 2);
 				}
 
 				// draw line to their edge y
 				if(this->agents[i]->get_edge_y() >= 0 && this->agents[i]->get_edge_y() <= this->n_nodes){
 					cv::Point2d p3 = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
-					p3.x = scale * (p3.x + this->map_width_meters/2);
-					p3.y = scale * (p3.y + this->map_height_meters/2);
+					p3.x = scale * (p3.x + this->map_width_cells/2);
+					p3.y = scale * (p3.y + this->map_height_cells/2);
 					cv::line(map, p1, p3, this->agents[i]->get_color(), 2);
 				}
 		
@@ -602,11 +628,12 @@ void World::display_world(const int &ms) {
 			std::vector<int> a_path = this->agents[i]->get_path();
 			if(a_path.size() > 0){
 				cv::Point p_loc = this->nodes[this->agents[i]->get_edge_y()]->get_loc();
-				p_loc.x = scale * (p_loc.x + this->map_width_meters/2); p_loc.y = scale * (p_loc.y + this->map_height_meters/2);
+				p_loc.x = scale * (p_loc.x + this->map_width_cells/2);
+				p_loc.y = scale * (p_loc.y + this->map_height_cells/2);
 				for(size_t j=1; j<a_path.size(); j++){
 					cv::Point p_cur = this->nodes[a_path[j]]->get_loc();
-					p_cur.x = scale * (p_cur.x + this->map_width_meters/2);
-					p_cur.y = scale * (p_cur.y + this->map_height_meters/2);
+					p_cur.x = scale * (p_cur.x + this->map_width_cells/2);
+					p_cur.y = scale * (p_cur.y + this->map_height_cells/2);
 					cv::Point p1(p_cur.x - 10*i, p_cur.y - 10*i);
 					cv::Point p2(p_loc.x - 10*i, p_loc.y - 10*i);
 
@@ -953,24 +980,31 @@ void World::initialize_nodes_and_tasks() {
 		bool flag = true;
 
 		while(flag){
-			x = this->rand_double_in_range(-this->map_width_meters/2.1, this->map_width_meters/2.1);
-			y = this->rand_double_in_range(-this->map_height_meters/2.1, this->map_height_meters/2.1);
+			x = this->rand_double_in_range(double(this->Obs_Mat.cols)*0.1, double(this->Obs_Mat.cols)*0.9);
+			y = this->rand_double_in_range(double(this->Obs_Mat.rows)*0.1, double(this->Obs_Mat.rows)*0.9);
 
-			if(this->Obs_Mat.at<uchar>(cv::Point(x + this->map_width_meters/2,y+this->map_height_meters/2)) <= obs_threshold){
+			//ROS_WARN("val: %i", this->Obs_Mat.at<uchar>(cv::Point(x, y)));
+			//cv::Mat a = this->Obs_Mat.clone();
+			//cv::circle(a, cv::Point(x,y), 10.0, cv::Scalar(127), -1);
+			//cv::namedWindow("Playing", cv::WINDOW_NORMAL);
+			//cv::imshow("Playing", a);
+			//cv::waitKey(0);
+
+			if(this->Obs_Mat.at<uchar>(cv::Point(x, y)) <= this->node_obstacle_threshold){
 				flag = false;
 			}
 		}
 
 		int task_type = rand() % n_task_types;
 		if(this->hardware_trial){
-			if(this->Obs_Mat.at<uchar>(cv::Point(x + this->map_width_meters/2,y+this->map_height_meters/2)) <= 50){
+			if(this->Obs_Mat.at<uchar>(cv::Point(x, y)) <= this->node_obstacle_threshold / 2.0){
 				task_type = 0; // open field task
 			}
 			else{
 				task_type = 1; // obstacle task
 			}
 		}
-		Map_Node* n = new Map_Node(x, y, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
+		Map_Node* n = new Map_Node(x-double(this->Obs_Mat.cols)/2.0, y-double(this->Obs_Mat.rows)/2.0, i, this->p_task_initially_active, task_type, task_work_by_agent[task_type], task_colors[task_type], this->flat_tasks, this);
 		this->nodes.push_back(n);
 	}
 }
