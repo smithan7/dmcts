@@ -245,9 +245,9 @@ void World::get_obs_mat(){
 		cv::max(this->Obs_Mat,s,this->Obs_Mat);
 	}
 
-	cv::namedWindow("DMCTS::World::seed_obs_mat:Obstacles", cv::WINDOW_NORMAL);
-	cv::imshow("DMCTS::World::seed_obs_mat:Obstacles", this->Obs_Mat);
-	cv::waitKey(10);
+	//cv::namedWindow("DMCTS::World::seed_obs_mat:Obstacles", cv::WINDOW_NORMAL);
+	//cv::imshow("DMCTS::World::seed_obs_mat:Obstacles", this->Obs_Mat);
+	//cv::waitKey(10);
 
 	//cv::namedWindow("DMCTS_World::World::seed_obs_mat:Env_Mat", cv::WINDOW_NORMAL);
 	//cv::imshow("DMCTS_World::World::seed_obs_mat:Env_Mat", this->Env_Mat);

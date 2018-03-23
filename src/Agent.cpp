@@ -115,12 +115,12 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->request_work_pub = nHandle.advertise<custom_messages::DMCTS_Request_Work>("/dmcts_master/request_work", 10);
 
 		// Timer Durations
-		this->plan_duration = ros::Duration(0.1);
+		this->plan_duration = ros::Duration(0.5);
 		if(this->index == 0){
 			this->act_duration = ros::Duration(0.1);
 		}
 		else{
-			this->act_duration = ros::Duration(0.1);
+			this->act_duration = ros::Duration(0.5);
 		}
 		this->send_loc_duration = ros::Duration(1.0);
 		
