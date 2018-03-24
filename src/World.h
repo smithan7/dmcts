@@ -82,6 +82,8 @@ public:
 	int my_agent_index, my_agent_type;
 	double agent_cruising_speed, desired_alt;
 private:
+    std::string map_name;
+    bool read_map, write_map;
 	double north_lat, south_lat, east_lon, west_lon, origin_lat, origin_lon;
     std::string test_environment_img, test_obstacle_img;
 	std::vector<double> max_task_rewards, min_task_rewards;
@@ -135,9 +137,11 @@ private:
 	double to_radians(const double &deg);
 
 	// initialize everything
-	std::string world_directory, task_selection_method;
+	std::string world_directory, package_directory, task_selection_method;
 	int rand_seed;
 	void initialize_nodes_and_tasks();
+    void write_nodes_as_params();
+	void read_nodes_and_tasks();
 	void initialize_PRM();
 	void generate_tasks();
 	void initialize_agents(ros::NodeHandle nHandle);
