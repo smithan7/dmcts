@@ -76,7 +76,7 @@ World::World(ros::NodeHandle nHandle){
 	
    	this->test_obstacle_img = this->package_directory + this->test_obstacle_img;
     this->test_environment_img = this->package_directory + this->test_environment_img;
-    this->world_directory = this->package_directory + "/worlds/";
+    this->world_directory = this->package_directory + "worlds/";
 
     this->cells_per_meter = 1.0 / this->meters_per_cell;
     this->inflation_box_size = inflation_box_size_meters * this->cells_per_meter;
