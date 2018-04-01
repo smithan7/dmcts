@@ -242,7 +242,9 @@ void Agent::coordination_callback(const custom_messages::DMCTS_Coordination &msg
 	//ROS_INFO("Agent[%i]'s understanding of agent[%i]s coord tree", this->get_index(), msg.agent_index);
 	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
 	
-	this->world->get_agents()[msg.agent_index]->upload_new_plan(msg.claimed_tasks, msg.claimed_time, msg.claimed_probability);
+	if(msg.agent_index < int(this->world->get_agents().size())){
+    	this->world->get_agents()[msg.agent_index]->upload_new_plan(msg.claimed_tasks, msg.claimed_time, msg.claimed_probability);
+    }
 	//this->world->get_agents()[msg.agent_index]->get_coordinator()->print_prob_actions();
 	
 }

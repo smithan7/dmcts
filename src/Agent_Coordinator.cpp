@@ -54,7 +54,9 @@ void Agent_Coordinator::upload_new_plan(const std::vector<int> &claimed_tasks, c
 	//}
 
 	for(int i=0; i<claimed_tasks.size(); i++){
-		this->prob_actions[claimed_tasks[i]]->insert_claim(claimed_time[i], claimed_probability[i]);
+	    if(claimed_tasks[i] < int(this->prob_actions.size())){
+		    this->prob_actions[claimed_tasks[i]]->insert_claim(claimed_time[i], claimed_probability[i]);
+		}
 	}
 }
 
