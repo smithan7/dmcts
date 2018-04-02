@@ -225,6 +225,7 @@ void Agent::publish_coordination(){
 	custom_messages::DMCTS_Coordination msg = custom_messages::DMCTS_Coordination();
 	msg.agent_index = this->index;
 	this->coordinator->get_plan(msg.claimed_tasks, msg.claimed_time, msg.claimed_probability);
+	//ROS_WARN("coordination msg: %i, %i, %i", int(msg.claimed_tasks.size()), int(msg.claimed_time.size()), int(msg.claimed_probability.size()));
 	coord_pub.publish(msg);
 }
 
@@ -568,7 +569,10 @@ bool Agent::plan(){
 		this->planner->plan(); // Figure out where to go
 		//ROS_INFO("Agent[%i]::plan: out of planner->plan", this->index);
 		//ROS_INFO("Agent[%i]::plan: on edge %i -> %i", this->index, int(this->edge.x), int(this->edge.y));
-		this->coordinator->advertise_task_claim(this->world); // Advertise where I am going
+		
+		if(this->task_selection_method == "greedy_completion_reward"){
+		    this->coordinator->advertise_task_claim(this->world); // Advertise where I am going
+		}
 		//ROS_INFO("Agent[%i]::plan: out of advertise_task_claim", this->index);
 		//ROS_INFO("Agent[%i]::plan: on edge %i -> %i", this->index, int(this->edge.x), int(this->edge.y));
 		return true;
