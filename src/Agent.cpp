@@ -348,7 +348,7 @@ void Agent::act_timer_callback(const ros::TimerEvent &e){
 void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
 	//ROS_INFO("Agent::publish_loc_timer_callback: in");
 	
-	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration){
+	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration && this->reached_starting_node && this->at_altitude){
 		this->run_status = 0;
 		this->in_contact_with_ground_station = false;
 		//ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
