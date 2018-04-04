@@ -90,7 +90,7 @@ public:
 	void set_pose(Pose* pose_in) {this->pose = pose_in; };
 	void update_pose(const double &xi, const double &yi, const double &zi, const double wi);
 
-	bool task_list_initialized, act_initialized, plan_initialized, m_node_initialized, initialized, location_initialized, reached_starting_node, at_altitude;
+	bool task_list_initialized, act_initialized, plan_initialized, m_node_initialized, initialized, location_initialized, reached_starting_node, at_altitude, in_contact_with_ground_station;
 
 	int get_index() { return this->index; };
 	cv::Point2d get_loc2d();

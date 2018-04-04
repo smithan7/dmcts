@@ -196,7 +196,9 @@ void Agent::publish_status_msgs_timer_callback(const ros::TimerEvent &e){
 	if(!this->location_initialized){
 		ROS_WARN("Agent[%i]::plan: Agent location is not initialized", this->index);
 	}
-
+    if(!this->in_contact_with_ground_station){
+    		ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
+    }
 }
 
 bool Agent::get_at_node(const int &node){
@@ -226,6 +228,7 @@ void Agent::work_timer_callback(const ros::TimerEvent &e){
 void Agent::pulse_callback(const custom_messages::DMCTS_Pulse &msg){
 	//ROS_INFO("Agent::pulse_callback: in ");
 	this->last_pulse_time = ros::Time::now();
+	this->in_contact_with_ground_station = true;
 	if(this->index > msg.my_index){
 		this->world->set_time(msg.c_time);
 	}
@@ -306,16 +309,16 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 				}
 			}
 			else{
-				ROS_WARN("Agent[%i]::plan_timer_callback: reached_starting_node is FALSE", this->index);
+			//	ROS_WARN("Agent[%i]::plan_timer_callback: reached_starting_node is FALSE", this->index);
 			}
 		}
 		else{
-			ROS_WARN("Agent[%i]::plan_timer_callback: task_list_initialized is FALSE", this->index);
+		//	ROS_WARN("Agent[%i]::plan_timer_callback: task_list_initialized is FALSE", this->index);
 			this->publish_task_list_request();
 		}
 	}
 	else{
-		ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
+	//	ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
 	}
 }
 
@@ -347,7 +350,8 @@ void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
 	
 	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration){
 		this->run_status = 0;
-		ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
+		this->in_contact_with_ground_station = false;
+		//ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
 	}
 
 
