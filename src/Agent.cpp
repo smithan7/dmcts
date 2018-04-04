@@ -401,9 +401,9 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 	//ROS_WARN("Agent[%i]::odom_callback::odom_in: %.2f, %.2f", this->pose->get_x(), this->pose->get_y());
 
 	// have I set my starting pose?
-	if(!this->location_initialized && this->reached_starting_node){
+	if(!this->location_initialized){
 		// have I initialized myself?
-		if(this->initialized){
+		if(this->initialized && this->reached_starting_node){
 			double min_dist = INFINITY;
 			int mindex = -1;
 			for(int i=0; i<this->world->get_n_nodes(); i++){
