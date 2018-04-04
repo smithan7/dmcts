@@ -341,7 +341,7 @@ void Agent::act_timer_callback(const ros::TimerEvent &e){
 void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
 	//ROS_INFO("Agent::publish_loc_timer_callback: in");
 	
-	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration && this->reached_starting_node && this->at_altitude){
+	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration && this->run_status == 1){
 		this->run_status = 0;
 		this->in_contact_with_ground_station = false;
 		//ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
@@ -376,9 +376,6 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 		double ts = sqrt(pow(odom_in.twist.twist.linear.x,2) + pow(odom_in.twist.twist.linear.y,2));
 		this->travel_vel = this->travel_vel + 0.001 * (ts - this->travel_vel);
 		//ROS_INFO("travel_vel: %0.2f", this->travel_vel);
-		if(this->run_status == -1){
-			this->run_status = 0; // I have reached altitude
-		}
 
 		// Do I need to check if I have reached start
 		if(!this->reached_starting_node){
@@ -386,6 +383,11 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 			this->reached_starting_node = this->at_node(this->starting_node);
 			if(this->reached_starting_node){
 			    ROS_INFO("Agent[%i]::reached their starting node", this->index);
+			}
+		}
+		else{
+			if(this->run_status == -1){
+				this->run_status = 0; // I have reached altitude
 			}
 		}
 
