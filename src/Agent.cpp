@@ -308,17 +308,10 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 					this->publish_coordination();
 				}
 			}
-			else{
-			//	ROS_WARN("Agent[%i]::plan_timer_callback: reached_starting_node is FALSE", this->index);
-			}
 		}
 		else{
-		//	ROS_WARN("Agent[%i]::plan_timer_callback: task_list_initialized is FALSE", this->index);
 			this->publish_task_list_request();
 		}
-	}
-	else{
-	//	ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
 	}
 }
 
@@ -391,6 +384,9 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 		if(!this->reached_starting_node){
 			// I do!
 			this->reached_starting_node = this->at_node(this->starting_node);
+			if(this->reached_starting_node){
+			    ROS_INFO("Agent[%i]::reached their starting node", this->index);
+			}
 		}
 
 	}
