@@ -234,19 +234,21 @@ void Agent::pulse_callback(const custom_messages::DMCTS_Pulse &msg){
 	}
 	if(msg.status == 1){
     	this->m_node_initialized = true;
-    	this->run_status = 1; // all good, run
+    	if( this->run_status >= 0){
+    	    this->run_status = 1; // all good, run
+    	}
     }
     else{
     	if(this->m_node_initialized){
 			// had a problem, go back to waiting
-			this->run_status = 0;
+			this->run_status = std::min(0, this->run_status);
 		    ROS_ERROR("Agent[%i]::pulse_callback: Ground Station has an Error: DMCTS_Loc", this->index);
 		    return;
     	}
     	else{
 	    	// problem, wait
 	    	ROS_WARN("DMCTS::Agent[%i]::pulse_callback: Waiting to run (%i)", this->index, this->run_status);
-	    	this->run_status = 0;
+	    	this->run_status = std::min(0, this->run_status);
     	}
 	}
 	if(this->world->get_n_active_tasks() != msg.n_active_tasks){
@@ -342,11 +344,12 @@ void Agent::publish_loc_timer_callback(const ros::TimerEvent &e){
 	//ROS_INFO("Agent::publish_loc_timer_callback: in");
 	
 	if (ros::Time::now() - this->last_pulse_time > this->pulse_duration && this->run_status == 1){
-		this->run_status = 0;
+		if(this->run_status >= 0){
+		    this->run_status = 0;
+		}
 		this->in_contact_with_ground_station = false;
 		//ROS_WARN("Agent::publish_loc_timer_callback::Have NOT heard pulse from Groundstation, switching modes");
 	}
-
 
 	custom_messages::DMCTS_Loc msg;
 	msg.index = this->index;
@@ -387,7 +390,7 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 		}
 		else{
 			if(this->run_status == -1){
-				this->run_status = 0; // I have reached altitude
+				this->run_status = 0; // I have reached altitude and starting location
 			}
 		}
 
