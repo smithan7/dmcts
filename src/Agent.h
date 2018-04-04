@@ -34,7 +34,7 @@ class Agent
 {
 public:
 	// ros stuff
-	ros::Timer plan_timer, act_timer, send_loc_timer, task_list_timer, work_timer;
+	ros::Timer plan_timer, act_timer, send_loc_timer, task_list_timer, work_timer, publish_status_timer;
 	ros::Publisher move_pub, coord_pub, loc_pub, request_work_pub, request_task_list_pub;
 	ros::Subscriber odom_sub, coord_sub, pulse_sub, work_status_sub, task_list_sub;
 
@@ -44,10 +44,12 @@ public:
 	ros::Duration task_list_timer_duration, task_list_wait_duration; // How often do I check if my task list request was answered and how long until I send another one
 	ros::Duration  work_request_timer_duration, work_wait_duration; // How often do I check if my work request was answered and how long until I send another one
 	ros::Time last_pulse_time, work_request_sent_time, task_list_request_sent_time;
-	
+	ros::Duration publish_status_msg_duration;
+
 	// My planning and action callbacks
 	void plan_timer_callback(const ros::TimerEvent &e); // use planning method
 	void act_timer_callback(const ros::TimerEvent &e); // move / work
+	void publish_status_msgs_timer_callback(const ros::TimerEvent &e);
 	
 	// Publish to Quad
 	void publish_to_control_script(const int &goal_node ); // publish command vel to python node
@@ -88,7 +90,7 @@ public:
 	void set_pose(Pose* pose_in) {this->pose = pose_in; };
 	void update_pose(const double &xi, const double &yi, const double &zi, const double wi);
 
-	bool task_list_initialized, act_initialized, plan_initialized, m_node_initialized, initialized, location_initialized;
+	bool task_list_initialized, act_initialized, plan_initialized, m_node_initialized, initialized, location_initialized, reached_starting_node, at_altitude;
 
 	int get_index() { return this->index; };
 	cv::Point2d get_loc2d();
@@ -132,6 +134,7 @@ private:
 	Pose* pose;
 	double desired_alt;
 	std::vector<int> path;
+	int starting_node;
 
 	// planning and coordinator
 	Goal* goal_node;

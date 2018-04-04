@@ -28,6 +28,7 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 
 	this->world = world_in;
 	this->index = this->world->my_agent_index;
+	this->starting_node = this->world->starting_node;
 	this->work_radius = work_radius;
 	this->type = type;
 	this->travel_vel = this->world->agent_cruising_speed;
@@ -132,12 +133,15 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->work_wait_duration = ros::Duration(1.0); // Wait 3 seconds before sending a second request for work
 		this->work_request_sent_time = ros::Time::now();
 
+		this->publish_status_msg_duration = ros::Duration(2.0);
+
 		// Timer Callbacks
 		this->plan_timer = nHandle.createTimer(this->plan_duration, &Agent::plan_timer_callback, this);
 		this->act_timer = nHandle.createTimer(this->act_duration, &Agent::act_timer_callback, this);
 		this->send_loc_timer = nHandle.createTimer(this->send_loc_duration, &Agent::publish_loc_timer_callback, this);
 		this->task_list_timer = nHandle.createTimer(this->task_list_timer_duration, &Agent::task_list_timer_callback, this);
 		this->work_timer = nHandle.createTimer(this->work_request_timer_duration, &Agent::work_timer_callback, this);
+		this->publish_status_timer = nHandle.createTimer(this->publish_status_msg_duration, &Agent::publish_status_msgs_timer_callback, this);
 
 		this->waiting_on_work_status = false;
 		this->waiting_on_task_list = false;
@@ -164,8 +168,35 @@ Agent::Agent(ros::NodeHandle nHandle, const int &index_in, const int &type, cons
 		this->m_node_initialized = false;
 		this->plan_initialized = false;
 		this->act_initialized = false;
+		this->reached_starting_node = false;
+		this->at_altitude = false;
 		this->initialized = true;
 	}
+}
+
+void Agent::publish_status_msgs_timer_callback(const ros::TimerEvent &e){
+	if(!this->task_list_initialized){
+		ROS_WARN("Agent[%i]::Task list is NOT initialized", this->index);
+	}
+	if(!this->m_node_initialized){
+		ROS_WARN("Agent[%i]::m_node is NOT initialized", this->index);
+	}
+	if(!this->plan_initialized){
+		ROS_WARN("Agent[%i]::plan is NOT initialized", this->index);
+	}
+	if(!this->act_initialized){
+		ROS_WARN("Agent[%i]::act is NOT initialized", this->index);
+	}
+	if(!this->reached_starting_node){
+		ROS_WARN("Agent[%i]::I have not reached starting location", this->index);
+	}
+	if(!this->at_altitude){
+		ROS_WARN("Agent[%i]::Not at cruising altitude", this->index);
+	}
+	if(!this->location_initialized){
+		ROS_WARN("Agent[%i]::plan: Agent location is not initialized", this->index);
+	}
+
 }
 
 bool Agent::get_at_node(const int &node){
@@ -265,12 +296,17 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 	//ROS_INFO("Agent::plan_timer_callback: in");
 	if(this->m_node_initialized){
 		if(this->task_list_initialized){
-			if(!this->plan()){
-				ROS_ERROR("Agent[%i]::plan_timer_callback: Agent->plan() Failed", this->index);
+			if(this->reached_starting_node){
+				if(!this->plan()){
+					ROS_ERROR("Agent[%i]::plan_timer_callback: Agent->plan() Failed", this->index);
+				}
+				else{
+					this->plan_initialized = true;
+					this->publish_coordination();
+				}
 			}
 			else{
-				this->plan_initialized = true;
-				this->publish_coordination();
+				ROS_WARN("Agent[%i]::plan_timer_callback: reached_starting_node is FALSE", this->index);
 			}
 		}
 		else{
@@ -279,12 +315,19 @@ void Agent::plan_timer_callback(const ros::TimerEvent &e){
 		}
 	}
 	else{
-		//ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
+		ROS_WARN("Agent[%i]::plan_timer_callback: m_node_initialized is FALSE", this->index);
 	}
 }
 
 void Agent::act_timer_callback(const ros::TimerEvent &e){
 	//ROS_INFO("Agent::act_timer_callback: in");
+	// Have I reached my starting location?
+	if( !this->reached_starting_node){
+		// I have not, head to starting node
+		this->publish_to_control_script(this->starting_node);
+		return;
+	}
+
 	if(this->plan_initialized && this->m_node_initialized && this->task_list_initialized){
 		if(!this->act()){
 			ROS_ERROR("Agent[%i]::act_timer_callback: Agent->act() Failed", this->index);
@@ -332,14 +375,23 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 	//ROS_ERROR("vel: %0.2f, %0.2f", odom_in.twist.twist.linear.x, odom_in.twist.twist.linear.y);
 
 	if(abs(odom_in.pose.pose.position.z - this->desired_alt) < 1.0){
+		this->at_altitude = true;
 		double ts = sqrt(pow(odom_in.twist.twist.linear.x,2) + pow(odom_in.twist.twist.linear.y,2));
 		this->travel_vel = this->travel_vel + 0.001 * (ts - this->travel_vel);
 		//ROS_INFO("travel_vel: %0.2f", this->travel_vel);
 		if(this->run_status == -1){
 			this->run_status = 0; // I have reached altitude
 		}
+
+		// Do I need to check if I have reached start
+		if(!this->reached_starting_node){
+			// I do!
+			this->reached_starting_node = this->at_node(this->starting_node);
+		}
+
 	}
 	else{ // I am no longer at altitude
+		this->at_altitude = false;
 		this->run_status = -1;
 	}
 

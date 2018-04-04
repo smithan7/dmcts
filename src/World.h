@@ -79,7 +79,7 @@ public:
 
 	double alpha, beta, epsilon, gamma, min_sampling_threshold, way_point_tollerance;
 	int search_depth;
-	int my_agent_index, my_agent_type;
+	int my_agent_index, my_agent_type, starting_node;
 	double agent_cruising_speed, desired_alt;
 private:
     std::string map_name;

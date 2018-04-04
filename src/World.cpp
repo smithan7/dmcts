@@ -21,8 +21,9 @@ World::World(ros::NodeHandle nHandle){
 
 	double speed_penalty, inflation_box_size_meters;
 	std::vector<bool> team_pay_obstacle_costs;
-	std::vector<int> agent_types;
+	std::vector<int> agent_types, starting_nodes;
 	std::vector<double> cruising_speeds, agent_altitudes;
+
 	ros::param::get("/test_environment_img", this->test_environment_img);
 	ros::param::get("/test_obstacle_img", this->test_obstacle_img);
 	ros::param::get("/agent_index", this->my_agent_index);
@@ -63,6 +64,7 @@ World::World(ros::NodeHandle nHandle){
 	ros::param::get("/n_agent_types", this->n_agent_types);
 	ros::param::get("/starting_xs", this->starting_xs);
 	ros::param::get("/starting_ys", this->starting_ys);
+	ros::param::get("/starting_nodes", starting_nodes);
 	ros::param::get("/node_obstacle_threshold", this->node_obstacle_threshold);
 	ros::param::get("/map_name", this->map_name);
 	ros::param::get("/read_map", this->read_map);
@@ -73,6 +75,7 @@ World::World(ros::NodeHandle nHandle){
 	this->desired_alt = agent_altitudes[this->my_agent_index];
 	this->pay_obstacle_cost = team_pay_obstacle_costs[this->my_agent_index];
 	this->my_agent_type = agent_types[this->my_agent_index];
+	this->starting_node = starting_nodes[this->my_agent_index];
 	
    	this->test_obstacle_img = this->package_directory + this->test_obstacle_img;
     this->test_environment_img = this->package_directory + this->test_environment_img;
@@ -85,6 +88,7 @@ World::World(ros::NodeHandle nHandle){
 	ROS_INFO("   test_environment_img %s", this->test_environment_img.c_str());
 	ROS_INFO("   test_obstacle_img %s", this->test_obstacle_img.c_str());
 	ROS_INFO("   agent_index %i", this->my_agent_index);
+	ROS_INFO("   starting_node %i", this->starting_node);
 	ROS_INFO("   package directory %s", this->package_directory.c_str());
 	ROS_INFO("   world directory %s", this->world_directory.c_str());
 	ROS_INFO("   score_run %i", this->score_run);
