@@ -377,7 +377,7 @@ void Agent::odom_callback(const nav_msgs::Odometry &odom_in){
 	if(abs(odom_in.pose.pose.position.z - this->desired_alt) < 1.0){
 		this->at_altitude = true;
 		double ts = sqrt(pow(odom_in.twist.twist.linear.x,2) + pow(odom_in.twist.twist.linear.y,2));
-		this->travel_vel = this->travel_vel + 0.001 * (ts - this->travel_vel);
+		this->travel_vel = this->travel_vel + 0.0001 * (ts - this->travel_vel);
 		//ROS_INFO("travel_vel: %0.2f", this->travel_vel);
 
 		// Do I need to check if I have reached start
