@@ -76,24 +76,23 @@ void Agent_Planning::Distributed_MCTS_task_by_completion_reward() {
 	this->agent->get_coordinator()->reset_prob_actions(); // clear out probable actions before adding the new ones
 	this->dist_mcts->sample_tree(this->agent->get_coordinator(), depth_in, coord_update);
 	//printf("sampling time: %0.2f \n", double(clock()) / double(CLOCKS_PER_SEC) - s_time);
-	//std::vector<int> best_path;
-	//std::vector<double> times;
-	//std::vector<double> rewards;
-	//this->dist_mcts->get_best_path(best_path, times, rewards, depth_in, coord_update);
+	std::vector<int> best_path;
+	std::vector<double> times;
+	std::vector<double> rewards;
+	this->dist_mcts->get_best_path(best_path, times, rewards, depth_in, coord_update);
 
-    /*
-	std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
+    std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
 	for(size_t i=0; i<best_path.size(); i++){
 		std::cout << std::fixed << std::setprecision(2) << best_path[i] << ", ";
 		std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
 	}
 	std::cout << std::endl;
 	this->agent->set_path(best_path);
-	*/
+	
 
 	
-	//std::vector<double> probs(int(best_path.size()), 1.0);
-	//this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
+	std::vector<double> probs(int(best_path.size()), 1.0);
+	this->agent->get_coordinator()->upload_new_plan(best_path, times, probs);
 	//std::cout << "Agent_Planning::Distributed_MCTS_task_by_completion_reward:[" << this->agent->get_index() << "]: best_path: ";
 	//for(size_t i=0; i<best_path.size(); i++){
 	//	std::cout << std::fixed << std::setprecision(2) << " ( Path[" << i << "]: " << best_path[i] << " @ " << times[i] << " for " << rewards[i] <<"), ";// << " with probs: " << probs[i] << "), ";
